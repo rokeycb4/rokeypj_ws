@@ -1,0 +1,10 @@
+# ROS 2 colcon build folders
+build/
+install/
+log/
+
+# Python __pycache__
+__pycache__/
+
+# VSCode 설정 무시 (혹시 vscode 쓴다면)
+.vscode/
