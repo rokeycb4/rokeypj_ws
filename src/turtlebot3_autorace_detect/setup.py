@@ -46,7 +46,7 @@ setup(
             'detect_tunnel_sign = turtlebot3_autorace_detect.detect_tunnel_sign:main',
 
 
-            'detect_lane = turtlebot3_autorace_detect.detect_lane2:main',
+            'detect_lane2 = turtlebot3_autorace_detect.detect_lane2:main',
 
         ],
     },
