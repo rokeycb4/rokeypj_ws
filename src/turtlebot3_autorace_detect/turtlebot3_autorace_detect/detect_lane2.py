@@ -60,13 +60,24 @@ class DetectLane(Node):
         self.sub_image_type = 'compressed'
         self.pub_image_type = 'compressed'
 
-        # 여기: launch파일 remapping을 통해 외부 토픽 이름이 연결됨
+        # # 여기: launch파일 remapping을 통해 외부 토픽 이름이 연결됨
+        # if self.sub_image_type == 'compressed':
+        #     self.sub_image_original = self.create_subscription(
+        #         CompressedImage, '/detect/image_input/compressed', self.cbFindLane, 1)
+        # else:
+        #     self.sub_image_original = self.create_subscription(
+        #         Image, '/detect/image_input', self.cbFindLane, 1)
+
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
-                CompressedImage, '/detect/image_input/compressed', self.cbFindLane, 1)
-        else:
+                #CompressedImage, '/detect/image_input/compressed', self.cbFindLane, 1
+                CompressedImage, '/image_raw/compressed', self.cbFindLane, 1                
+                )
+        elif self.sub_image_type == 'raw':
             self.sub_image_original = self.create_subscription(
-                Image, '/detect/image_input', self.cbFindLane, 1)
+                Image, '/detect/image_input', self.cbFindLane, 1
+                )
+
 
         self.pub_image_lane = self.create_publisher(
             CompressedImage, '/detect/image_output/compressed', 1)

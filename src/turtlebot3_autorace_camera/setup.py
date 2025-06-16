@@ -35,7 +35,9 @@ setup(
     entry_points={
         'console_scripts': [
             'image_compensation = turtlebot3_autorace_camera.image_compensation:main',
-            'image_projection = turtlebot3_autorace_camera.image_projection:main'
+            'image_projection = turtlebot3_autorace_camera.image_projection:main',
+            'img_publish = turtlebot3_autorace_camera.img_publish:main',
+
         ],
     },
 )

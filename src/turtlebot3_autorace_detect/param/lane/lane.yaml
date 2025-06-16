@@ -11,9 +11,9 @@
           saturation_h: 70
           saturation_l: 0
         yellow:
-          hue_h: 55
+          hue_h: 40
           hue_l: 25
-          lightness_h: 230
+          lightness_h: 180
           lightness_l: 30
           saturation_h: 255
           saturation_l: 60
