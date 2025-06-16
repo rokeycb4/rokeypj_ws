@@ -18,8 +18,8 @@ class ImagePublisher(Node):
         self.timer = self.create_timer(0.2, self.publish_image)
 
         # OpenCV 비디오 캡처 객체 생성 (카메라 0번 장치 사용)
-        #self.cap = cv2.VideoCapture('/dev/v4l/by-id/usb-Jieli_Technology_USB_Composite_Device-video-index0')
-        self.cap = cv2.VideoCapture(1)
+        self.cap = cv2.VideoCapture('/dev/v4l/by-id/usb-Jieli_Technology_USB_Composite_Device-video-index0')
+        # self.cap = cv2.VideoCapture(1)
         #self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         #self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
