@@ -27,6 +27,9 @@ setup(
         'console_scripts': [
 		'control_lane = turtlebot3_autorace_driving.control_lane:main',
 		'control_moving = turtlebot3_autorace_driving.control_moving:main',
+
+		'lc_test = turtlebot3_autorace_driving.lc_test:main',
+
         ],
     },
 )
