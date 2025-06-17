@@ -267,17 +267,32 @@ class DetectLane(Node):
                 self.mov_avg_right = np.array([self.right_fit])
 
         MOV_AVG_LENGTH = 5
-        
-        self.left_fit = np.array([
-            np.mean(self.mov_avg_left[::-1][:, 0][0:MOV_AVG_LENGTH]),
-            np.mean(self.mov_avg_left[::-1][:, 1][0:MOV_AVG_LENGTH]),
-            np.mean(self.mov_avg_left[::-1][:, 2][0:MOV_AVG_LENGTH])
-            ])
-        self.right_fit = np.array([
-            np.mean(self.mov_avg_right[::-1][:, 0][0:MOV_AVG_LENGTH]),
-            np.mean(self.mov_avg_right[::-1][:, 1][0:MOV_AVG_LENGTH]),
-            np.mean(self.mov_avg_right[::-1][:, 2][0:MOV_AVG_LENGTH])
-            ])
+        if self.mov_avg_left.shape[0] > 0:  # mov_avg_left 배열에 데이터가 있을 때만 평균을 계산
+            self.left_fit = np.array([
+                np.mean(self.mov_avg_left[::-1][:, 0][0:MOV_AVG_LENGTH]),
+                np.mean(self.mov_avg_left[::-1][:, 1][0:MOV_AVG_LENGTH]),
+                np.mean(self.mov_avg_left[::-1][:, 2][0:MOV_AVG_LENGTH])
+                ])
+        else:
+            # 데이터가 없으면 __init__에서 설정한 기본 left_fit 값을 유지
+            self.get_logger().warn('No left lane data yet for moving average. Using default left_fit.')
+
+        # left_fit이 업데이트되었든 기본값이든, 항상 left_fitx를 새로 계산
+        self.left_fitx = self.left_fit[0] * ploty**2 + self.left_fit[1] * ploty + self.left_fit[2]
+
+        # mov_avg_right 배열에 데이터가 있을 때만 평균을 계산
+        if self.mov_avg_right.shape[0] > 0:
+            self.right_fit = np.array([
+                np.mean(self.mov_avg_right[::-1][:, 0][0:MOV_AVG_LENGTH]),
+                np.mean(self.mov_avg_right[::-1][:, 1][0:MOV_AVG_LENGTH]),
+                np.mean(self.mov_avg_right[::-1][:, 2][0:MOV_AVG_LENGTH])
+                ])
+        else:
+            # 데이터가 없으면 __init__에서 설정한 기본 right_fit 값을 유지
+            self.get_logger().warn('No right lane data yet for moving average. Using default right_fit.')
+
+        # right_fit이 업데이트되었든 기본값이든, 항상 right_fitx를 새로 계산
+        self.right_fitx = self.right_fit[0] * ploty**2 + self.right_fit[1] * ploty + self.right_fit[2]
 
         if self.mov_avg_left.shape[0] > 1000:
             self.mov_avg_left = self.mov_avg_left[0:MOV_AVG_LENGTH]
@@ -511,6 +526,12 @@ class DetectLane(Node):
 
         # both lane -> 2, left lane -> 1, right lane -> 3, none -> 0
         lane_state = UInt8()
+
+        # 함수 시작 시 centerx를 기본값(이미지 중앙)으로 초기화
+        centerx = np.array([cv_image.shape[1] / 2] * cv_image.shape[0]) # 기본값으로 이미지 중앙 X좌표 사용
+
+        # 유효한 차선 중앙이 계산될 때만 True
+        self.is_center_x_exist = False
 
         if yellow_fraction > 3000:
             pts_left = np.array([np.flipud(np.transpose(np.vstack([self.left_fitx, ploty])))])

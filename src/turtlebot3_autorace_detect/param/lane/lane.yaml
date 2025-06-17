@@ -4,17 +4,17 @@
     detect:
       lane:
         white:
-          hue_l: 150
-          hue_h: 179
+          hue_l: 44
+          hue_h: 120
           saturation_l: 0
-          saturation_h: 70
-          lightness_l: 150
+          saturation_h: 255
+          lightness_l: 249
           lightness_h: 255
 
         yellow:
-          hue_l: 20
-          hue_h: 90
-          saturation_l: 50
+          hue_l: 8
+          hue_h: 50
+          saturation_l: 0
           saturation_h: 255
-          lightness_l: 80
+          lightness_l: 66
           lightness_h: 255
