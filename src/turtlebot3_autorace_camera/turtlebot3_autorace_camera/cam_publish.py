@@ -9,14 +9,11 @@ class LaptopCamPublisher(Node):
     def __init__(self):
         super().__init__('laptop_cam_publisher')
 
-        # 퍼블리시할 토픽 (autorace 시스템 호환성을 위해 그대로 유지)
         self.publisher_ = self.create_publisher(
             CompressedImage, '/camera/image_raw/compressed', 10)
 
-        # 노트북 기본 내장카메라 열기 (보통 0번 장치)
+        # 카메라 열기 (노트북 기본 카메라: index 0)
         self.cap = cv2.VideoCapture(0)
-
-        # 카메라 파라미터 설정 (노트북 카메라 해상도는 일부 장치에서 제한 가능)
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
         self.cap.set(cv2.CAP_PROP_FPS, 25)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -32,22 +29,32 @@ class LaptopCamPublisher(Node):
         else:
             self.get_logger().info("노트북 카메라 오픈 성공")
 
-        # 0.2초 (약 5fps) 주기로 퍼블리시
+        # 타이머 주기 (0.2초 → 5fps 정도)
         self.timer = self.create_timer(0.2, self.publish_image)
 
     def publish_image(self):
         ret, frame = self.cap.read()
 
         if ret:
+            # 좌우 반전 (좌우반전 적용: 원본처럼 보여주기 위함)
+            frame = cv2.flip(frame, 1)
+
+            # 이미지 크기 로그 출력
+            height, width, channels = frame.shape
+            self.get_logger().info(f"Captured frame size: {width} x {height}")
+
+            # JPEG 압축
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 30]
             _, compressed_image = cv2.imencode('.jpg', frame, encode_param)
 
+            # CompressedImage ROS 메시지 생성
             msg = CompressedImage()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = "laptop_camera"
             msg.format = "jpeg"
             msg.data = compressed_image.tobytes()
 
+            # 퍼블리시
             self.publisher_.publish(msg)
             self.get_logger().info('Published laptop /camera/image_raw/compressed')
         else:

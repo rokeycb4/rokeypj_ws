@@ -39,6 +39,7 @@ def generate_launch_description():
         ],
         remappings=[
             ('/camera/image_input', '/camera/image'),
+            
             ('/camera/image_output', '/camera/image_projected'),
             ('/camera/image_output/compressed', '/camera/image_projected/compressed'),
             ('/camera/image_calib', '/camera/image_extrinsic_calib'),
