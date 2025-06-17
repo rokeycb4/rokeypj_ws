@@ -60,7 +60,7 @@ class ImageCompensation(Node):
         if self.is_calibration_mode:
             self.add_on_set_parameters_callback(self.param_update_callback)
 
-        self.sub_image_type = 'raw'  # 'compressed' / 'raw'
+        self.sub_image_type = 'compressed'  # 'compressed' / 'raw'
         self.pub_image_type = 'raw'  # 'compressed' / 'raw'
 
         if self.sub_image_type == 'compressed':
@@ -73,7 +73,7 @@ class ImageCompensation(Node):
         elif self.sub_image_type == 'raw':
             self.sub_image_original = self.create_subscription(
                 Image,
-                '/camera/image_input',   # 구독하는거
+                '/camera/image_input',
                 self.cbImageCompensation,
                 10
             )
@@ -87,7 +87,7 @@ class ImageCompensation(Node):
         elif self.pub_image_type == 'raw':
             self.pub_image_compensated = self.create_publisher(
                 Image,
-                '/camera/image_output',   # 발행하는거
+                '/camera/image_output',
                 10
             )
 
