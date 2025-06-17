@@ -32,6 +32,10 @@ def generate_launch_description():
         executable='control_lane',
         name='control_lane',
         output='screen',
+        remappings=[
+            ('/control/lane', '/detect/lane'),
+            ('/control/cmd_vel', '/cmd_vel'),
+        ]
     )
 
     return LaunchDescription([

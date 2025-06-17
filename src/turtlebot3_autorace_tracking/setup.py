@@ -22,8 +22,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-		'control_lane = turtlebot3_autorace_driving.control_lane:main',
-		'control_moving = turtlebot3_autorace_driving.control_moving:main',
+		'control_lane = turtlebot3_autorace_tracking.control_lane:main',
+		'control_moving = turtlebot3_autorace_tracking.control_moving:main',
         ],
     },
 )
