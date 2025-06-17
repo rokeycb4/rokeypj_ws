@@ -6,7 +6,7 @@ import numpy as np
 from rcl_interfaces.msg import IntegerRange, ParameterDescriptor, SetParametersResult
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Float64, UInt8
 
 class DetectLane(Node):
@@ -14,37 +14,24 @@ class DetectLane(Node):
     def __init__(self):
         super().__init__('detect_lane')
 
-        parameter_descriptor_hue = ParameterDescriptor(
-            description='hue parameter range',
-            integer_range=[IntegerRange(
-                from_value=0,
-                to_value=179,
-                step=1)]
-        )
-
-        parameter_descriptor_saturation_lightness = ParameterDescriptor(
-            description='saturation and lightness range',
-            integer_range=[IntegerRange(
-                from_value=0,
-                to_value=255,
-                step=1)]
-        )
+        hue_desc = ParameterDescriptor(description='hue', integer_range=[IntegerRange(from_value=0, to_value=179, step=1)])
+        sl_desc = ParameterDescriptor(description='saturation_lightness', integer_range=[IntegerRange(from_value=0, to_value=255, step=1)])
 
         self.declare_parameters(
-            namespace='',
-            parameters=[
-                ('detect.lane.white.hue_l', 0, parameter_descriptor_hue),
-                ('detect.lane.white.hue_h', 179, parameter_descriptor_hue),
-                ('detect.lane.white.saturation_l', 10, parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.saturation_h', 60, parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.lightness_l', 180, parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.lightness_h', 255, parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.hue_l', 20, parameter_descriptor_hue),
-                ('detect.lane.yellow.hue_h', 40, parameter_descriptor_hue),
-                ('detect.lane.yellow.saturation_l', 50, parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.saturation_h', 255, parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.lightness_l', 60, parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.lightness_h', 255, parameter_descriptor_saturation_lightness),
+            '',
+            [
+                ('detect.lane.white.hue_l', 0, hue_desc),
+                ('detect.lane.white.hue_h', 179, hue_desc),
+                ('detect.lane.white.saturation_l', 0, sl_desc),
+                ('detect.lane.white.saturation_h', 70, sl_desc),
+                ('detect.lane.white.lightness_l', 105, sl_desc),
+                ('detect.lane.white.lightness_h', 255, sl_desc),
+                ('detect.lane.yellow.hue_l', 10, hue_desc),
+                ('detect.lane.yellow.hue_h', 127, hue_desc),
+                ('detect.lane.yellow.saturation_l', 70, sl_desc),
+                ('detect.lane.yellow.saturation_h', 255, sl_desc),
+                ('detect.lane.yellow.lightness_l', 95, sl_desc),
+                ('detect.lane.yellow.lightness_h', 255, sl_desc),
                 ('is_detection_calibration_mode', False)
             ]
         )
@@ -54,20 +41,28 @@ class DetectLane(Node):
         if self.is_calibration_mode:
             self.add_on_set_parameters_callback(self.param_callback)
 
-        # compensated 이미지만 구독
+        # 구독
+        self.sub_image_original = self.create_subscription(
+            CompressedImage, '/camera/image_raw/compressed', self.cbFindLaneCompressed, 1)
+        self.sub_image_preprocessed = self.create_subscription(
+            Image, '/camera/image', self.cbFindLaneRawPreprocessed, 1)
         self.sub_image_compensated = self.create_subscription(
             Image, '/camera/image_compensated', self.cbFindLaneRawCompensated, 1)
 
-        # 퍼블리셔
-        self.pub_image_lane = self.create_publisher(Image, '/detect/image_output', 1)
+        # 퍼블리셔 (이 부분만 토픽명 변경)
+        self.pub_image_lane = self.create_publisher(CompressedImage, '/detect/image_output/compressed', 1)
+        self.pub_image_lane_raw = self.create_publisher(CompressedImage, '/detect/image_output/org/compressed', 1)
+        self.pub_image_lane_preprocessed = self.create_publisher(CompressedImage, '/detect/image_output/preprocessed/compressed', 1)
         self.pub_lane = self.create_publisher(Float64, '/detect/lane', 1)
         self.pub_lane_state = self.create_publisher(UInt8, '/detect/lane_state', 1)
 
         if self.is_calibration_mode:
-            self.pub_image_white_lane = self.create_publisher(Image, '/detect/white_lane_mask', 1)
-            self.pub_image_yellow_lane = self.create_publisher(Image, '/detect/yellow_lane_mask', 1)
+            self.pub_image_white_lane = self.create_publisher(CompressedImage, '/detect/white_lane_mask/compressed', 1)
+            self.pub_image_yellow_lane = self.create_publisher(CompressedImage, '/detect/yellow_lane_mask/compressed', 1)
 
         self.cvBridge = CvBridge()
+        self.counter_compressed = 1
+        self.counter_preprocessed = 1
         self.counter_compensated = 1
 
     def load_parameters(self):
@@ -95,29 +90,56 @@ class DetectLane(Node):
         self.load_parameters()
         return SetParametersResult(successful=True)
 
+    # compressed 구독
+    def cbFindLaneCompressed(self, image_msg):
+        if self.counter_compressed % 3 != 0:
+            self.counter_compressed += 1
+            return
+        self.counter_compressed = 1
+        np_arr = np.frombuffer(image_msg.data, np.uint8)
+        cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        self.process_lane_visualize(cv_image, self.pub_image_lane_raw)
+
+    # preprocessed 구독
+    def cbFindLaneRawPreprocessed(self, image_msg):
+        if self.counter_preprocessed % 3 != 0:
+            self.counter_preprocessed += 1
+            return
+        self.counter_preprocessed = 1
+        cv_image = self.cvBridge.imgmsg_to_cv2(image_msg, 'bgr8')
+        self.process_lane_visualize(cv_image, self.pub_image_lane_preprocessed)
+
+    # compensated 구독 (full 검출)
     def cbFindLaneRawCompensated(self, image_msg):
         if self.counter_compensated % 3 != 0:
             self.counter_compensated += 1
             return
         self.counter_compensated = 1
-
         cv_image = self.cvBridge.imgmsg_to_cv2(image_msg, 'bgr8')
-        self.process_lane(cv_image)
+        self.process_lane_full(cv_image)
 
-    def process_lane(self, cv_image):
+    # full 퍼블리시용 검출
+    def process_lane_full(self, cv_image):
         white_mask = self.mask_lane(cv_image, 'white')
         yellow_mask = self.mask_lane(cv_image, 'yellow')
 
         if self.is_calibration_mode:
-            self.pub_image_white_lane.publish(self.cvBridge.cv2_to_imgmsg(white_mask, 'mono8'))
-            self.pub_image_yellow_lane.publish(self.cvBridge.cv2_to_imgmsg(yellow_mask, 'mono8'))
+            self.pub_image_white_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(white_mask, 'jpg'))
+            self.pub_image_yellow_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(yellow_mask, 'jpg'))
 
         final, state, center_x = self.make_lane(cv_image, white_mask, yellow_mask)
-        self.pub_image_lane.publish(self.cvBridge.cv2_to_imgmsg(final, 'bgr8'))
+        self.pub_image_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
         self.pub_lane_state.publish(UInt8(data=state))
         if center_x is not None:
             self.pub_lane.publish(Float64(data=float(center_x)))
             self.get_logger().info(f"CenterX: {center_x}")
+
+    # 시각화 전용 검출
+    def process_lane_visualize(self, cv_image, publisher):
+        white_mask = self.mask_lane(cv_image, 'white')
+        yellow_mask = self.mask_lane(cv_image, 'yellow')
+        final, _, _ = self.make_lane(cv_image, white_mask, yellow_mask)
+        publisher.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
 
     def mask_lane(self, image, color):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
