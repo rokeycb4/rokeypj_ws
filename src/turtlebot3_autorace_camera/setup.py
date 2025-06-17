@@ -41,6 +41,10 @@ setup(
             'img_publish = turtlebot3_autorace_camera.img_publish:main',
             'cam_publish = turtlebot3_autorace_camera.cam_publish:main',
 
+            'capture_img = turtlebot3_autorace_camera.capture_img:main',
+            'image_preprocess = turtlebot3_autorace_camera.image_preprocess:main',
+
+
         ],
     },
 )

@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+# 로봇 카메라 이미지 발행
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
