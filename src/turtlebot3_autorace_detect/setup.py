@@ -36,7 +36,7 @@ setup(
         'console_scripts': [
             'detect_construction_sign = turtlebot3_autorace_detect.detect_construction_sign:main',
             'detect_intersection_sign = turtlebot3_autorace_detect.detect_intersection_sign:main',
-            # 'detect_lane = turtlebot3_autorace_detect.detect_lane:main',
+            'detect_lane = turtlebot3_autorace_detect.detect_lane:main',
             'my_detect_lane = turtlebot3_autorace_detect.my_detect_lane:main',     
             'simple_detect_lane = turtlebot3_autorace_detect.simple_detect_lane:main',                     
             'detect_level_crossing = turtlebot3_autorace_detect.detect_level_crossing:main',

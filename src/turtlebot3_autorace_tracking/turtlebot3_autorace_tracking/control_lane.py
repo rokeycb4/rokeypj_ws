@@ -37,7 +37,8 @@ class ControlLane(Node):
         self.max_vel = msg.data
 
     def cb_follow_lane(self, msg):
-        center = msg.data
+        self.get_logger().info("cb_follow_lane called")
+        center = msg.data   
         error = center - 500.0
 
         # PD gains
