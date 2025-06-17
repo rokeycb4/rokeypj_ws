@@ -75,20 +75,20 @@ class ImageProjection(Node):
         if self.is_calibration_mode:
             self.add_on_set_parameters_callback(self.cbGetImageProjectionParam)
 
-        self.sub_image_type = 'raw'  # you can choose image type 'compressed', 'raw'
+        self.sub_image_type = 'compressed'  # you can choose image type 'compressed', 'raw'
         self.pub_image_type = 'raw'  # you can choose image type 'compressed', 'raw'
 
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
                 CompressedImage,
-                '/camera/image_input/compressed',    
+                '/camera/image_input/compressed',
                 self.cbImageProjection,
                 1
             )
         elif self.sub_image_type == 'raw':
             self.sub_image_original = self.create_subscription(
                 Image,
-                '/camera/image_input',  # 구독하는거
+                '/camera/image_input',
                 self.cbImageProjection,
                 1
             )
@@ -96,11 +96,11 @@ class ImageProjection(Node):
         if self.pub_image_type == 'compressed':
             self.pub_image_projected = self.create_publisher(
                 CompressedImage,
-                '/camera/image_output/compressed',      
+                '/camera/image_output/compressed',
                 1
             )
         elif self.pub_image_type == 'raw':
-            self.pub_image_projected = self.create_publisher(Image, '/camera/image_output', 1) # 발행되는거
+            self.pub_image_projected = self.create_publisher(Image, '/camera/image_output', 1)
 
         if self.is_calibration_mode:
             if self.pub_image_type == 'compressed':
