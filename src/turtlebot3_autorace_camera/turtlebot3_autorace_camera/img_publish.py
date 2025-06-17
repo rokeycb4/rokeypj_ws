@@ -50,6 +50,9 @@ class CameraImagePublisher(Node):
         if ret:
             self.failed_count = 0  # 성공시 실패카운터 초기화
 
+            height, width, channels = frame.shape
+            self.get_logger().info(f'프레임 크기: {width}x{height}, 채널: {channels}')
+
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 30]
             _, compressed_image = cv2.imencode('.jpg', frame, encode_param)
 
@@ -70,6 +73,7 @@ class CameraImagePublisher(Node):
                 self.cap.release()
                 time.sleep(0.5)
                 self.open_camera()
+
 
     def destroy_node(self):
         if self.cap.isOpened():
