@@ -176,6 +176,20 @@ class DetectLane(Node):
         self.mov_avg_left = np.empty((0, 3))
         self.mov_avg_right = np.empty((0, 3))
 
+        # Add these initializations
+
+        initial_img_height = 720 
+        initial_img_width = 1280  
+        ploty_init = np.linspace(0, initial_img_height - 1, initial_img_height)
+
+        self.left_fit = np.array([0.0, 0.0, initial_img_width / 2 - 150]) 
+        self.right_fit = np.array([0.0, 0.0, initial_img_width / 2 + 150])
+        self.lane_fit_bef = np.array([0., 0., 0.])
+
+        self.left_fitx = self.left_fit[0] * ploty_init**2 + self.left_fit[1] * ploty_init + self.left_fit[2]
+        self.right_fitx = self.right_fit[0] * ploty_init**2 + self.right_fit[1] * ploty_init + self.right_fit[2]
+        self.lane_fit_bef = np.array([0., 0., 0.])
+
     def cbGetDetectLaneParam(self, parameters):
         for param in parameters:
             self.get_logger().info(f'Parameter name: {param.name}')
@@ -223,6 +237,9 @@ class DetectLane(Node):
         elif self.sub_image_type == 'raw':
             cv_image = self.cvBridge.imgmsg_to_cv2(image_msg, 'bgr8')
 
+        # ploty defination
+        ploty = np.linspace(0, cv_image.shape[0] - 1, cv_image.shape[0])
+
         white_fraction, cv_white_lane = self.maskWhiteLane(cv_image)
         yellow_fraction, cv_yellow_lane = self.maskYellowLane(cv_image)
 
@@ -250,7 +267,7 @@ class DetectLane(Node):
                 self.mov_avg_right = np.array([self.right_fit])
 
         MOV_AVG_LENGTH = 5
-
+        
         self.left_fit = np.array([
             np.mean(self.mov_avg_left[::-1][:, 0][0:MOV_AVG_LENGTH]),
             np.mean(self.mov_avg_left[::-1][:, 1][0:MOV_AVG_LENGTH]),
@@ -271,6 +288,10 @@ class DetectLane(Node):
         self.make_lane(cv_image, white_fraction, yellow_fraction)
 
     def maskWhiteLane(self, image):
+
+        image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
+        image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
+
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         Hue_l = self.hue_white_l
@@ -284,6 +305,8 @@ class DetectLane(Node):
         upper_white = np.array([Hue_h, Saturation_h, Lightness_h])
 
         mask = cv2.inRange(hsv, lower_white, upper_white)
+
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
 
         fraction_num = np.count_nonzero(mask)
 
@@ -328,6 +351,10 @@ class DetectLane(Node):
         return fraction_num, mask
 
     def maskYellowLane(self, image):
+        
+        image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
+        image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
+
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         Hue_l = self.hue_yellow_l
@@ -341,6 +368,8 @@ class DetectLane(Node):
         upper_yellow = np.array([Hue_h, Saturation_h, Lightness_h])
 
         mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
 
         fraction_num = np.count_nonzero(mask)
 
