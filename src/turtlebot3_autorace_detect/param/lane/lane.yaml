@@ -5,16 +5,16 @@
       lane:
         white:
           hue_l: 0
-          hue_h: 179
+          hue_h: 20
           saturation_l: 0
           saturation_h: 50
-          lightness_l: 200
+          lightness_l: 180
           lightness_h: 255
 
         yellow:
-          hue_l: 25
-          hue_h: 35
-          saturation_l: 100
+          hue_l: 10  
+          hue_h: 50         
+          saturation_l: 30
           saturation_h: 255
-          lightness_l: 100
-          lightness_h: 255
+          lightness_l: 80
+          lightness_h: 230
