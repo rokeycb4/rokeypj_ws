@@ -1,29 +1,9 @@
-#!/usr/bin/env python3
-#
-# Copyright 2018 ROBOTIS CO., LTD.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Authors:
-#   - Leon Jung, Gilbert, Ashe Kim, Hyungyu Kim, ChanHyeong Lee
-#   - Special Thanks : Roger Sacchelli
+# detact_lane에서 토픽만 변경
+
 
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
-from rcl_interfaces.msg import IntegerRange
-from rcl_interfaces.msg import ParameterDescriptor
-from rcl_interfaces.msg import SetParametersResult
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
@@ -37,85 +17,61 @@ class DetectLane(Node):
     def __init__(self):
         super().__init__('detect_lane')
 
+        self.sub_image_type = 'compressed'  # you can choose image type 'compressed', 'raw'
+        self.pub_image_type = 'compressed'  # you can choose image type 'compressed', 'raw'
 
-        self.declare_parameter('raw_mode', False)
-        self.raw_mode = self.get_parameter('raw_mode').get_parameter_value().bool_value
-
-        parameter_descriptor_hue = ParameterDescriptor(
-            description='hue parameter range',
-            integer_range=[IntegerRange(
-                from_value=0,
-                to_value=179,
-                step=1)]
-        )
-        parameter_descriptor_saturation_lightness = ParameterDescriptor(
-            description='saturation and lightness range',
-            integer_range=[IntegerRange(
-                from_value=0,
-                to_value=255,
-                step=1)]
-        )
-        self.declare_parameters(
-            namespace='',
-            parameters=[
-                ('detect.lane.white.hue_l', 0,
-                    parameter_descriptor_hue),
-                ('detect.lane.white.hue_h', 179,
-                    parameter_descriptor_hue),
-                ('detect.lane.white.saturation_l', 10,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.saturation_h', 60,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.lightness_l', 180,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.white.lightness_h', 255,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.hue_l', 20,
-                    parameter_descriptor_hue),
-                ('detect.lane.yellow.hue_h', 40,
-                    parameter_descriptor_hue),
-                ('detect.lane.yellow.saturation_l', 50,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.saturation_h', 255,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.lightness_l', 60,
-                    parameter_descriptor_saturation_lightness),
-                ('detect.lane.yellow.lightness_h', 255,
-                    parameter_descriptor_saturation_lightness),
-                ('is_detection_calibration_mode', False)
-            ]
+        subscribe_topic = '/camera/image_raw/compressed'
+        self.sub_image_original = self.create_subscription(
+            CompressedImage, subscribe_topic, self.cbFindLane, 1
         )
 
-        self.hue_white_l = self.get_parameter(
-            'detect.lane.white.hue_l').get_parameter_value().integer_value
-        self.hue_white_h = self.get_parameter(
-            'detect.lane.white.hue_h').get_parameter_value().integer_value
-        self.saturation_white_l = self.get_parameter(
-            'detect.lane.white.saturation_l').get_parameter_value().integer_value
-        self.saturation_white_h = self.get_parameter(
-            'detect.lane.white.saturation_h').get_parameter_value().integer_value
-        self.lightness_white_l = self.get_parameter(
-            'detect.lane.white.lightness_l').get_parameter_value().integer_value
-        self.lightness_white_h = self.get_parameter(
-            'detect.lane.white.lightness_h').get_parameter_value().integer_value
+        if self.pub_image_type == 'compressed':
+            self.pub_image_lane = self.create_publisher(
+                CompressedImage, '/detect/image_output/compressed', 1
+            )
+        elif self.pub_image_type == 'raw':
+            self.pub_image_lane = self.create_publisher(
+                Image, '/detect/image_output', 1
+            )
 
-        self.hue_yellow_l = self.get_parameter(
-            'detect.lane.yellow.hue_l').get_parameter_value().integer_value
-        self.hue_yellow_h = self.get_parameter(
-            'detect.lane.yellow.hue_h').get_parameter_value().integer_value
-        self.saturation_yellow_l = self.get_parameter(
-            'detect.lane.yellow.saturation_l').get_parameter_value().integer_value
-        self.saturation_yellow_h = self.get_parameter(
-            'detect.lane.yellow.saturation_h').get_parameter_value().integer_value
-        self.lightness_yellow_l = self.get_parameter(
-            'detect.lane.yellow.lightness_l').get_parameter_value().integer_value
-        self.lightness_yellow_h = self.get_parameter(
-            'detect.lane.yellow.lightness_h').get_parameter_value().integer_value
+        self.pub_lane = self.create_publisher(Float64, '/detect/lane', 1)
+        self.pub_yellow_line_reliability = self.create_publisher(
+            UInt8, '/detect/yellow_line_reliability', 1
+        )
+        self.pub_white_line_reliability = self.create_publisher(
+            UInt8, '/detect/white_line_reliability', 1
+        )
+        self.pub_lane_state = self.create_publisher(UInt8, '/detect/lane_state', 1)
 
-        self.is_calibration_mode = self.get_parameter(
-            'is_detection_calibration_mode').get_parameter_value().bool_value
-        
+        self.cvBridge = CvBridge()
+        self.counter = 1
 
+        self.window_width = 1000.
+        self.window_height = 600.
+
+        self.reliability_white_line = 100
+        self.reliability_yellow_line = 100
+
+        self.mov_avg_left = np.empty((0, 3))
+        self.mov_avg_right = np.empty((0, 3))
+
+        initial_img_height = 720 
+        initial_img_width = 1280  
+        ploty_init = np.linspace(0, initial_img_height - 1, initial_img_height)
+
+        self.left_fit = np.array([0.0, 0.0, initial_img_width / 2 - 150]) 
+        self.right_fit = np.array([0.0, 0.0, initial_img_width / 2 + 150])
+        self.lane_fit_bef = np.array([0., 0., 0.])
+
+        self.left_fitx = self.left_fit[0] * ploty_init**2 + self.left_fit[1] * ploty_init + self.left_fit[2]
+        self.right_fitx = self.right_fit[0] * ploty_init**2 + self.right_fit[1] * ploty_init + self.right_fit[2]
+        self.lane_fit_bef = np.array([0., 0., 0.])
+
+        # HSV yellow range 고정 값으로 리스트 지정
+        self.hsv_yellow_lower = [20, 50, 60]
+        self.hsv_yellow_upper = [40, 255, 255]
+
+    
         if self.is_calibration_mode:
             self.add_on_set_parameters_callback(self.cbGetDetectLaneParam)
 
