@@ -60,11 +60,12 @@ class DetectLane(Node):
 
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-        # HSV 범위 변수명 변경
-        white_hsv_min = np.array([0, 0, 150])
-        white_hsv_max = np.array([180, 60, 255])
-        yellow_hsv_min = np.array([20, 40, 100])
-        yellow_hsv_max = np.array([40, 255, 255])
+        # 수정 예시
+        white_hsv_min = np.array([0, 0, 130])
+        white_hsv_max = np.array([180, 100, 255])
+        yellow_hsv_min = np.array([15, 40, 100])
+        yellow_hsv_max = np.array([50, 255, 255])
+
 
         mask_white = cv2.inRange(hsv, white_hsv_min, white_hsv_max)
         mask_yellow = cv2.inRange(hsv, yellow_hsv_min, yellow_hsv_max)
@@ -102,9 +103,10 @@ class DetectLane(Node):
             self.right_fit = np.mean(self.mov_avg_right[-self.mov_avg_length:], axis=0)
             self.right_fitx = self.right_fit[0] * ploty ** 2 + self.right_fit[1] * ploty + self.right_fit[2]
 
+        half_width = 400
         centerx = (self.left_fitx + self.right_fitx) / 2 if fraction_yellow > 3000 and fraction_white > 3000 else \
-                  self.left_fitx + 280 if fraction_yellow > 3000 else \
-                  self.right_fitx - 280 if fraction_white > 3000 else \
+                  self.left_fitx + 400 if fraction_yellow > 3000 else \
+                  self.right_fitx - 400 if fraction_white > 3000 else \
                   np.array([cv_image.shape[1] / 2] * mask.shape[0])
 
         self.pub_lane.publish(Float64(data=centerx[350]))
