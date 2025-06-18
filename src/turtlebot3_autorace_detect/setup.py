@@ -46,8 +46,8 @@ setup(
             'detect_lane2 = turtlebot3_autorace_detect.detect_lane2:main',
             'detect_ufld = turtlebot3_autorace_detect.detect_ufld:main',
 
-
             'detect_lane3 = turtlebot3_autorace_detect.detect_lane3:main',
+            'detect_stop_line = turtlebot3_autorace_detect.detect_stop_line:main',
 
         ],
     },

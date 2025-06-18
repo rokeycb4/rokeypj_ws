@@ -15,8 +15,10 @@ class LCTest(Node):
         self.subscriber_created = False
         self.active = False
 
-        self.get_logger().info('Node started, waiting 3 seconds before subscribing...')
-        self.create_timer(8.0, self.start_subscriber)
+        self.center_value = 500.0  # 기본값 설정
+
+        self.get_logger().info('Node started, waiting 5 seconds before subscribing...')
+        self.create_timer(5.0, self.start_subscriber)
 
     def start_subscriber(self):
         if not self.subscriber_created:
@@ -30,17 +32,19 @@ class LCTest(Node):
             self.subscriber_created = True
 
     def callback_follow_lane(self, msg):
-        if not self.active:
-            self.get_logger().info('Received first lane center, starting 5 second movement...')
-            self.active = True
-            threading.Thread(target=self.drive_for_seconds, args=(msg.data,)).start()
+        self.center_value = msg.data  # 계속 갱신됨
 
-    def drive_for_seconds(self, center_value):
+        if not self.active:
+            self.get_logger().info('Received first /detect/lane, starting 2 second movement...')
+            self.active = True
+            threading.Thread(target=self.drive_for_seconds).start()
+
+    def drive_for_seconds(self):
         start_time = time.time()
-        duration = 2  # 5초 동안 주행
+        duration = 2  # n초 동안 주행
 
         while time.time() - start_time < duration:
-            error = center_value - 500
+            error = self.center_value - 500
 
             twist = Twist()
             twist.linear.x = 0.1
@@ -49,7 +53,7 @@ class LCTest(Node):
 
             time.sleep(0.1)  # 10Hz
 
-        self.get_logger().info('5 seconds done, stopping the robot.')
+        self.get_logger().info(f'{duration} seconds done, stopping the robot.')
         self.stop_robot()
 
     def stop_robot(self):

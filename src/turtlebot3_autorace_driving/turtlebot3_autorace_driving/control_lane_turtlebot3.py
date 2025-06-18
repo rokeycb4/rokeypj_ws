@@ -1,21 +1,36 @@
+#!/usr/bin/env python3
+#
+# Copyright 2018 ROBOTIS CO., LTD.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Leon Jung, Gilbert, Ashe Kim, Hyungyu Kim, ChanHyeong Lee
+
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64, Bool
+from std_msgs.msg import Bool
+from std_msgs.msg import Float64
 
 
 class ControlLane(Node):
-
-    # state
-    STATE_RUN = 0
-    STATE_STOP = 1
 
     def __init__(self):
         super().__init__('control_lane')
 
         self.sub_lane = self.create_subscription(
             Float64,
-            '/detect/lane',
+            '/control/lane',
             self.callback_follow_lane,
             1
         )
@@ -25,10 +40,16 @@ class ControlLane(Node):
             self.callback_get_max_vel,
             1
         )
-        self.sub_stopline = self.create_subscription(
+        self.sub_avoid_cmd = self.create_subscription(
+            Twist,
+            '/avoid_control',
+            self.callback_avoid_cmd,
+            1
+        )
+        self.sub_avoid_active = self.create_subscription(
             Bool,
-            '/detect/stopline',
-            self.callback_stopline,
+            '/avoid_active',
+            self.callback_avoid_active,
             1
         )
 
@@ -42,14 +63,20 @@ class ControlLane(Node):
         self.last_error = 0
         self.MAX_VEL = 0.1
 
-        # Initial state
-        self.state = self.STATE_RUN
+        # Avoidance mode related variables
+        self.avoid_active = False
+        self.avoid_twist = Twist()
 
     def callback_get_max_vel(self, max_vel_msg):
         self.MAX_VEL = max_vel_msg.data
 
     def callback_follow_lane(self, desired_center):
-        if self.state != self.STATE_RUN:
+        """
+        Receive lane center data to generate lane following control commands.
+
+        If avoidance mode is enabled, lane following control is ignored.
+        """
+        if self.avoid_active:
             return
 
         center = desired_center.data
@@ -67,12 +94,18 @@ class ControlLane(Node):
         twist.angular.z = -max(angular_z, -2.0) if angular_z < 0 else -min(angular_z, 2.0)
         self.pub_cmd_vel.publish(twist)
 
-    def callback_stopline(self, msg):
-        if msg.data and self.state != self.STATE_STOP:
-            self.get_logger().info('Stopline detected. Stopping the robot.')
-            self.state = self.STATE_STOP
-            twist = Twist()  # All velocities zero
-            self.pub_cmd_vel.publish(twist)
+    def callback_avoid_cmd(self, twist_msg):
+        self.avoid_twist = twist_msg
+
+        if self.avoid_active:
+            self.pub_cmd_vel.publish(self.avoid_twist)
+
+    def callback_avoid_active(self, bool_msg):
+        self.avoid_active = bool_msg.data
+        if self.avoid_active:
+            self.get_logger().info('Avoidance mode activated.')
+        else:
+            self.get_logger().info('Avoidance mode deactivated. Returning to lane following.')
 
     def shut_down(self):
         self.get_logger().info('Shutting down. cmd_vel will be 0')

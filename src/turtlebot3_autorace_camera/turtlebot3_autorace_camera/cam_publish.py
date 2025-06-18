@@ -13,7 +13,8 @@ class LaptopCamPublisher(Node):
             CompressedImage, '/camera/image_raw/compressed', 10)
 
         # 카메라 열기 (노트북 기본 카메라: index 0)
-        self.cap = cv2.VideoCapture(0)
+        # self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(2)  # usb 웹캠 - 2번
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
         self.cap.set(cv2.CAP_PROP_FPS, 25)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
