@@ -28,7 +28,9 @@ setup(
             'aruco_move = aruco_yolo.aruco_move:main',
             'compressed_image_pub = aruco_yolo.compressed_image_pub:main',
             'yolo_detector = aruco_yolo.yolo_detector:main',
-            'turtlebot_aruco = aruco_yolo.turtlebot_aruco:main'
+            'turtlebot_aruco = aruco_yolo.turtlebot_aruco:main',
+            'pick_and_place = aruco_yolo.pick_and_place:main'
+
         ],
     },
     package_data={
