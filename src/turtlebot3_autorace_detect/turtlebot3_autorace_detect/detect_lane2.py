@@ -1,14 +1,10 @@
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
-from rcl_interfaces.msg import IntegerRange
-from rcl_interfaces.msg import ParameterDescriptor
-from rcl_interfaces.msg import SetParametersResult
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Float64
-from std_msgs.msg import UInt8
+from std_msgs.msg import Float64, UInt8
 
 
 class DetectLane(Node):
@@ -16,61 +12,14 @@ class DetectLane(Node):
     def __init__(self):
         super().__init__('detect_lane')
 
-        self.declare_parameter('raw_mode', False)
-        self.raw_mode = self.get_parameter('raw_mode').get_parameter_value().bool_value
-
-        parameter_descriptor_hue = ParameterDescriptor(
-            description='hue parameter range',
-            integer_range=[IntegerRange(from_value=0, to_value=179, step=1)]
-        )
-        parameter_descriptor_sl = ParameterDescriptor(
-            description='saturation and lightness range',
-            integer_range=[IntegerRange(from_value=0, to_value=255, step=1)]
-        )
-
-        self.declare_parameters(
-            namespace='',
-            parameters=[
-                ('detect.lane.white.hue_l', 0, parameter_descriptor_hue),
-                ('detect.lane.white.hue_h', 179, parameter_descriptor_hue),
-                ('detect.lane.white.saturation_l', 10, parameter_descriptor_sl),
-                ('detect.lane.white.saturation_h', 60, parameter_descriptor_sl),
-                ('detect.lane.white.lightness_l', 180, parameter_descriptor_sl),
-                ('detect.lane.white.lightness_h', 255, parameter_descriptor_sl),
-                ('detect.lane.yellow.hue_l', 20, parameter_descriptor_hue),
-                ('detect.lane.yellow.hue_h', 40, parameter_descriptor_hue),
-                ('detect.lane.yellow.saturation_l', 50, parameter_descriptor_sl),
-                ('detect.lane.yellow.saturation_h', 255, parameter_descriptor_sl),
-                ('detect.lane.yellow.lightness_l', 60, parameter_descriptor_sl),
-                ('detect.lane.yellow.lightness_h', 255, parameter_descriptor_sl),
-                ('is_detection_calibration_mode', False)
-            ]
-        )
-
-        self.hue_white_l = self.get_parameter('detect.lane.white.hue_l').get_parameter_value().integer_value
-        self.hue_white_h = self.get_parameter('detect.lane.white.hue_h').get_parameter_value().integer_value
-        self.saturation_white_l = self.get_parameter('detect.lane.white.saturation_l').get_parameter_value().integer_value
-        self.saturation_white_h = self.get_parameter('detect.lane.white.saturation_h').get_parameter_value().integer_value
-        self.lightness_white_l = self.get_parameter('detect.lane.white.lightness_l').get_parameter_value().integer_value
-        self.lightness_white_h = self.get_parameter('detect.lane.white.lightness_h').get_parameter_value().integer_value
-
-        self.hue_yellow_l = self.get_parameter('detect.lane.yellow.hue_l').get_parameter_value().integer_value
-        self.hue_yellow_h = self.get_parameter('detect.lane.yellow.hue_h').get_parameter_value().integer_value
-        self.saturation_yellow_l = self.get_parameter('detect.lane.yellow.saturation_l').get_parameter_value().integer_value
-        self.saturation_yellow_h = self.get_parameter('detect.lane.yellow.saturation_h').get_parameter_value().integer_value
-        self.lightness_yellow_l = self.get_parameter('detect.lane.yellow.lightness_l').get_parameter_value().integer_value
-        self.lightness_yellow_h = self.get_parameter('detect.lane.yellow.lightness_h').get_parameter_value().integer_value
-
-        self.is_calibration_mode = self.get_parameter('is_detection_calibration_mode').get_parameter_value().bool_value
-        if self.is_calibration_mode:
-            self.add_on_set_parameters_callback(self.cb_calibration_param)
-
         self.sub_image_type = 'compressed'
         self.pub_image_type = 'compressed'
 
-        subscribe_topic = '/camera/image_raw/compressed' if self.raw_mode else '/camera/preprocessed/compressed'
         self.sub_image_original = self.create_subscription(
-            CompressedImage, subscribe_topic, self.cbFindLane, 1
+            CompressedImage,
+            '/camera/preprocessed/compressed',
+            self.cbFindLane,
+            1
         )
 
         self.pub_image_lane = self.create_publisher(CompressedImage, '/detect/image_masked/compressed', 1)
@@ -94,12 +43,6 @@ class DetectLane(Node):
         self.left_fitx = np.array([])
         self.right_fitx = np.array([])
 
-    def cb_calibration_param(self, parameters):
-        for param in parameters:
-            if hasattr(self, param.name.split('.')[-1]):
-                setattr(self, param.name.split('.')[-1], param.value)
-        return SetParametersResult(successful=True)
-
     def compute_reliability(self, mask, current_reliability):
         height = mask.shape[0]
         how_much_short = height - np.count_nonzero(np.any(mask > 0, axis=1))
@@ -119,11 +62,18 @@ class DetectLane(Node):
         cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-        mask_white = cv2.inRange(hsv, (self.hue_white_l, self.saturation_white_l, self.lightness_white_l),
-                                      (self.hue_white_h, self.saturation_white_h, self.lightness_white_h))
-        mask_yellow = cv2.inRange(hsv, (self.hue_yellow_l, self.saturation_yellow_l, self.lightness_yellow_l),
-                                       (self.hue_yellow_h, self.saturation_yellow_h, self.lightness_yellow_h))
+
+        # 하드코딩된 HSV 범위
+        lower_white = np.array([0, 0, 150])
+        upper_white = np.array([180, 60, 255])
+
+        lower_yellow = np.array([20, 40, 100])
+        upper_yellow = np.array([40, 255, 255])
+
+        mask_white = cv2.inRange(hsv, lower_white, upper_white)
+        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
         mask = cv2.bitwise_or(mask_white, mask_yellow)
+
         fraction_white = np.count_nonzero(mask_white)
         fraction_yellow = np.count_nonzero(mask_yellow)
 
@@ -151,15 +101,15 @@ class DetectLane(Node):
 
         if self.mov_avg_left.shape[0] > 0:
             self.left_fit = np.mean(self.mov_avg_left[-self.mov_avg_length:], axis=0)
-            self.left_fitx = self.left_fit[0]*ploty**2 + self.left_fit[1]*ploty + self.left_fit[2]
+            self.left_fitx = self.left_fit[0] * ploty ** 2 + self.left_fit[1] * ploty + self.left_fit[2]
         if self.mov_avg_right.shape[0] > 0:
             self.right_fit = np.mean(self.mov_avg_right[-self.mov_avg_length:], axis=0)
-            self.right_fitx = self.right_fit[0]*ploty**2 + self.right_fit[1]*ploty + self.right_fit[2]
+            self.right_fitx = self.right_fit[0] * ploty ** 2 + self.right_fit[1] * ploty + self.right_fit[2]
 
         centerx = (self.left_fitx + self.right_fitx) / 2 if fraction_yellow > 3000 and fraction_white > 3000 else \
-                  self.left_fitx + 280 if fraction_yellow > 3000 else \
-                  self.right_fitx - 280 if fraction_white > 3000 else \
-                  np.array([cv_image.shape[1] / 2] * mask.shape[0])
+            self.left_fitx + 280 if fraction_yellow > 3000 else \
+            self.right_fitx - 280 if fraction_white > 3000 else \
+            np.array([cv_image.shape[1] / 2] * mask.shape[0])
 
         self.pub_lane.publish(Float64(data=centerx[350]))
 
@@ -185,7 +135,6 @@ class DetectLane(Node):
                 cv2.fillPoly(color_warp, np.int32([pts]), color=(0, 255, 0))
 
         final = cv2.addWeighted(cv_image, 1, color_warp, 0.6, 0)
-
         self.pub_image_output.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
 
         color_mask = cv2.bitwise_and(cv_image, cv_image, mask=mask)
@@ -196,7 +145,7 @@ class DetectLane(Node):
         y, x = nonzero[0], nonzero[1]
         lane_fit = np.polyfit(y, x, 2)
         ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
-        lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
+        lane_fitx = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
         return lane_fitx, lane_fit
 
     def sliding_window(self, img_w, side):
@@ -234,8 +183,9 @@ class DetectLane(Node):
             lane_fit = self.lane_fit_bef
 
         ploty = np.linspace(0, img_w.shape[0] - 1, img_w.shape[0])
-        lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
+        lane_fitx = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
         return lane_fitx, lane_fit
+
 
 def main(args=None):
     rclpy.init(args=args)
