@@ -68,7 +68,7 @@ class ImageCompensation(Node):
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
                 CompressedImage,
-                '/image_raw/compressed',
+                '/camera/image_raw/compressed',
                 self.cbImageCompensation,
                 10
             )

@@ -267,7 +267,7 @@ class DetectLane(Node):
         self.get_logger().info("--- Entering draw_lane_and_publish ---")
 
         ploty = np.linspace(0, base_image.shape[0] - 1, base_image.shape[0])
-        
+
         warp_zero = np.zeros_like(yellow_mask).astype(np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
         self.get_logger().info("Step A: Blank warp image created.")
@@ -276,14 +276,24 @@ class DetectLane(Node):
         white_detected = np.count_nonzero(white_mask) > 3000
 
         lane_state = 0
-        if yellow_detected and white_detected: lane_state = 2
-        elif yellow_detected: lane_state = 1
-        elif white_detected: lane_state = 3
+        if yellow_detected and white_detected:
+            lane_state = 2
+        elif yellow_detected:
+            lane_state = 1
+        elif white_detected:
+            lane_state = 3
         self.get_logger().info(f"Step B: Lane state calculated: {lane_state}")
 
         centerx = None
         if lane_state == 2:
+            # 두 배열의 길이가 다를 수 있으므로 에러 방지를 위해 최소 길이 기준으로 잘라서 평균 계산
+            min_len = min(len(left_fitx), len(right_fitx), len(ploty))
+            left_fitx = left_fitx[:min_len]
+            right_fitx = right_fitx[:min_len]
+            ploty = ploty[:min_len]
+
             centerx = np.mean([left_fitx, right_fitx], axis=0)
+
             pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
             pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
             pts = np.hstack((pts_left, pts_right))
@@ -292,8 +302,8 @@ class DetectLane(Node):
             centerx = left_fitx + 320
         elif lane_state == 3:
             centerx = right_fitx - 320
-        
-        # ... (polylines 그리는 부분은 시각화이므로 일단 그대로 둡니다)
+
+        # 차선 시각화 (yellow, white, center)
         if yellow_detected:
             pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
             cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 0), thickness=25)
@@ -305,26 +315,32 @@ class DetectLane(Node):
             cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
         self.get_logger().info("Step C: Drawing on BEV image complete.")
 
+        # 원근 복원 및 합성
         unwarped_lane = cv2.warpPerspective(color_warp, self.Minv, (base_image.shape[1], base_image.shape[0]))
         final_image = cv2.addWeighted(base_image, 1, unwarped_lane, 0.5, 0)
         self.get_logger().info("Step D: Un-warping and composition complete.")
 
-        # 최종 정보 발행
-        # 압축 방식을 'png'로 명확하게 지정하여 안정성 확보
+        # 최종 이미지 퍼블리시
         final_image_msg = self.cvBridge.cv2_to_compressed_imgmsg(final_image, 'png')
         self.pub_image_lane.publish(final_image_msg)
         self.get_logger().info("Step E: Published final detected image.")
 
+        # 상태 퍼블리시
         lane_state_msg = UInt8(data=lane_state)
         self.pub_lane_state.publish(lane_state_msg)
         self.get_logger().info("Step F: Published lane state.")
 
+        # 중심 위치 퍼블리시
         if centerx is not None:
-            desired_center = centerx[400]
-            self.pub_lane_center.publish(Float64(data=desired_center))
-            self.get_logger().info("Step G: Published lane center.")
+            if len(centerx) > 400:  # 안전하게 인덱스 접근
+                desired_center = centerx[400]
+                self.pub_lane_center.publish(Float64(data=desired_center))
+                self.get_logger().info("Step G: Published lane center.")
+            else:
+                self.get_logger().warn("centerx 길이가 400보다 짧아 lane center 퍼블리시 생략됨.")
 
         self.get_logger().info("--- Leaving draw_lane_and_publish ---")
+
 
 
 def main(args=None):
