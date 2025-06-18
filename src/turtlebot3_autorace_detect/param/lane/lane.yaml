@@ -8,7 +8,7 @@
           hue_h: 120
           saturation_l: 0
           saturation_h: 255
-          lightness_l: 249
+          lightness_l: 100
           lightness_h: 255
 
         yellow:

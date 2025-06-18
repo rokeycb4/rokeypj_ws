@@ -22,14 +22,24 @@ class ImageSaverFromCompressedTopic(Node):
         os.makedirs(self.save_dir, exist_ok=True)
         self.get_logger().info(f"이미지 저장 폴더: {self.save_dir}")
 
+        # # CompressedImage 토픽 구독
+        # self.subscription = self.create_subscription(
+        #     CompressedImage,
+        #     '/camera/image_raw/compressed',
+        #     self.image_callback,
+        #     10
+        # )
+
         # CompressedImage 토픽 구독
         self.subscription = self.create_subscription(
             CompressedImage,
-            '/camera/image_raw/compressed',
+            '/camera/preprocessed/compressed',
             self.image_callback,
             10
         )
-        self.get_logger().info("구독 시작: /camera/image_raw/compressed")
+
+        # self.get_logger().info("구독 시작: /camera/image_raw/compressed")
+        self.get_logger().info("/camera/preprocessed/compressed")
 
         # 키보드 입력 감지 스레드 시작
         self.input_thread = threading.Thread(target=self.wait_for_enter)
