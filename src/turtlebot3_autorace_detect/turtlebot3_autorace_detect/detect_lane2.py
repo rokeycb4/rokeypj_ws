@@ -40,13 +40,18 @@ class DetectLane(Node):
         self.left_fitx = np.array([])
         self.right_fitx = np.array([])
 
+        # 파라미터화된 값들
+        self.reliability_threshold = 100
+        self.reliability_step = 5
+        self.detection_threshold = 3000
+
     def compute_reliability(self, mask, current_reliability):
         height = mask.shape[0]
         how_much_short = height - np.count_nonzero(np.any(mask > 0, axis=1))
-        if how_much_short > 100:
-            current_reliability = max(0, current_reliability - 5)
+        if how_much_short > self.reliability_threshold:
+            current_reliability = max(0, current_reliability - self.reliability_step)
         else:
-            current_reliability = min(100, current_reliability + 5)
+            current_reliability = min(100, current_reliability + self.reliability_step)
         return current_reliability
 
     def cbFindLane(self, msg):
@@ -60,12 +65,10 @@ class DetectLane(Node):
 
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-        # 수정 예시
-        white_hsv_min = np.array([0, 0, 130])
-        white_hsv_max = np.array([180, 100, 255])
-        yellow_hsv_min = np.array([15, 40, 100])
-        yellow_hsv_max = np.array([50, 255, 255])
-
+        white_hsv_min = np.array([0, 0, 100])
+        white_hsv_max = np.array([180, 150, 255])
+        yellow_hsv_min = np.array([18, 40, 100])
+        yellow_hsv_max = np.array([45, 255, 255])
 
         mask_white = cv2.inRange(hsv, white_hsv_min, white_hsv_max)
         mask_yellow = cv2.inRange(hsv, yellow_hsv_min, yellow_hsv_max)
@@ -82,17 +85,17 @@ class DetectLane(Node):
 
         ploty = np.linspace(0, mask.shape[0] - 1, mask.shape[0])
         try:
-            if fraction_yellow > 3000:
+            if fraction_yellow > self.detection_threshold:
                 self.left_fitx, self.left_fit = self.fit_from_lines(self.left_fit, mask_yellow)
                 self.mov_avg_left = np.append(self.mov_avg_left, np.array([self.left_fit]), axis=0)
-            if fraction_white > 3000:
+            if fraction_white > self.detection_threshold:
                 self.right_fitx, self.right_fit = self.fit_from_lines(self.right_fit, mask_white)
                 self.mov_avg_right = np.append(self.mov_avg_right, np.array([self.right_fit]), axis=0)
         except:
-            if fraction_yellow > 3000:
+            if fraction_yellow > self.detection_threshold:
                 self.left_fitx, self.left_fit = self.sliding_window(mask_yellow, 'left')
                 self.mov_avg_left = np.array([self.left_fit])
-            if fraction_white > 3000:
+            if fraction_white > self.detection_threshold:
                 self.right_fitx, self.right_fit = self.sliding_window(mask_white, 'right')
                 self.mov_avg_right = np.array([self.right_fit])
 
@@ -104,17 +107,17 @@ class DetectLane(Node):
             self.right_fitx = self.right_fit[0] * ploty ** 2 + self.right_fit[1] * ploty + self.right_fit[2]
 
         half_width = 400
-        centerx = (self.left_fitx + self.right_fitx) / 2 if fraction_yellow > 3000 and fraction_white > 3000 else \
-                  self.left_fitx + 400 if fraction_yellow > 3000 else \
-                  self.right_fitx - 400 if fraction_white > 3000 else \
+        centerx = (self.left_fitx + self.right_fitx) / 2 if fraction_yellow > self.detection_threshold and fraction_white > self.detection_threshold else \
+                  self.left_fitx + half_width if fraction_yellow > self.detection_threshold else \
+                  self.right_fitx - half_width if fraction_white > self.detection_threshold else \
                   np.array([cv_image.shape[1] / 2] * mask.shape[0])
 
         self.pub_lane.publish(Float64(data=centerx[350]))
 
         lane_state = UInt8()
-        lane_state.data = 2 if fraction_yellow > 3000 and fraction_white > 3000 else \
-                          1 if fraction_yellow > 3000 else \
-                          3 if fraction_white > 3000 else 0
+        lane_state.data = 2 if fraction_yellow > self.detection_threshold and fraction_white > self.detection_threshold else \
+                          1 if fraction_yellow > self.detection_threshold else \
+                          3 if fraction_white > self.detection_threshold else 0
         self.pub_lane_state.publish(lane_state)
 
         self.get_logger().info(f"LaneState: {lane_state.data}, CenterX: {centerx[350]:.2f}")
@@ -125,30 +128,30 @@ class DetectLane(Node):
             pts_right = np.array([np.transpose(np.vstack([self.right_fitx, ploty]))])
             pts = np.hstack((pts_left, pts_right))
 
-            if fraction_yellow > 3000:
+            if fraction_yellow > self.detection_threshold:
                 cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(0, 0, 255), thickness=10)
-            if fraction_white > 3000:
+            if fraction_white > self.detection_threshold:
                 cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(255, 255, 0), thickness=10)
-            if fraction_yellow > 3000 and fraction_white > 3000:
+            if fraction_yellow > self.detection_threshold and fraction_white > self.detection_threshold:
                 cv2.fillPoly(color_warp, np.int32([pts]), color=(0, 255, 0))
 
-        # 중심선 시각화 및 텍스트
         if centerx is not None and centerx.size == ploty.size:
             pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
             cv2.polylines(color_warp, np.int32(pts_center), isClosed=False, color=(255, 0, 0), thickness=2)
 
             mid_y = int(mask.shape[0] * 0.5)
             mid_x = int(centerx[mid_y])
-            cv2.putText(
-                color_warp,
-                'CENTER',
-                (mid_x - 40, mid_y - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 0, 0),
-                2,
-                cv2.LINE_AA
-            )
+            cv2.putText(color_warp, 'CENTER', (mid_x - 40, mid_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2, cv2.LINE_AA)
+
+        if self.left_fitx.size > 0:
+            y_l = int(mask.shape[0] * 0.6)
+            x_l = int(self.left_fitx[y_l])
+            cv2.putText(color_warp, 'L', (x_l - 10, y_l - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+
+        if self.right_fitx.size > 0:
+            y_r = int(mask.shape[0] * 0.6)
+            x_r = int(self.right_fitx[y_r])
+            cv2.putText(color_warp, 'R', (x_r - 10, y_r - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2, cv2.LINE_AA)
 
         final = cv2.addWeighted(cv_image, 1, color_warp, 0.6, 0)
         self.pub_image_output.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
