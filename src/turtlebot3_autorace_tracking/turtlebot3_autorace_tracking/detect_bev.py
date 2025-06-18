@@ -54,24 +54,18 @@ class DetectLane(Node):
 
     def _create_perspective_transform(self):
         """
-        src, dst 좌표는 차량의 카메라 설정에 맞게 반드시 튜닝해야 합니다.
         원근 변환을 위한 매트릭스를 생성합니다.
+        src, dst 좌표는 차량의 카메라 설정에 맞게 반드시 튜닝해야 합니다.
         """
         # 이미지 크기: 1280x720 기준
         img_size = (1280, 720)
         # 원본 이미지의 차선 영역 4개 꼭짓점 (Source points)
         src = np.float32([
-        (61, 0),  # 왼쪽 위
-        (0, 720),  # 왼쪽 아래
-        (1280, 720),  # 오른쪽 아래        
-        (1114, 0)  # 오른쪽 위
+        (340, 720),  # 왼쪽 아래
+        (840, 720),  # 오른쪽 아래      4    3
+        (720, 360),  # 오른쪽 위        1    2
+        (460, 360)   # 왼쪽 위
         ])
-        # src = np.float32([
-        # (460, 360),  # 왼쪽 위
-        # (340, 720),  # 왼쪽 아래
-        # (840, 720),  # 오른쪽 아래        
-        # (720, 360)  # 오른쪽 위
-        # ])
 
         # 변환 후 결과 이미지의 4개 꼭짓점 (Destination points)
         dst = np.float32([
@@ -95,46 +89,27 @@ class DetectLane(Node):
 
         # 1. 메시지 디코딩
         # PNG 자체가 압축 포맷이고, 압축된 1채널 이미지는 encoding 정보를 무시하는 경우가 있음.
-        # 수정) mono8 명시 => 안정적으로 기본값 사용 => sliding_window 함수 실행 불가
-        # sliding_window 알고리즘은 1채널 이미지를 기준으로 만들어졌기 때문에, 3채널을 받아
-        # 차선 찾기 실패, /lane_state가 출력x.
+        # 수정) mono8 명시 => 안정적으로 기본값 사용
         img_compensated = self.cvBridge.compressed_imgmsg_to_cv2(msg_compensated)
-
-        # cv_bridge가 가장 잘 처리하는 기본값(bgr8)으로 먼저 디코딩
-        # 결과로 나온 3채널 이미지를 우리가 필요한 1채널 흑백 이미지로 직접 변환
         mask_white = self.cvBridge.compressed_imgmsg_to_cv2(msg_white)
-        # 만약 3채널이라면, 1채널로 변환하여 자기 자신에게 다시 덮어씁니다.
-        if len(mask_white.shape) == 3:
-            mask_white = cv2.cvtColor(mask_white, cv2.COLOR_BGR2GRAY)
-        # 노란색 마스크도 동일하게 처리합니다.
         mask_yellow = self.cvBridge.compressed_imgmsg_to_cv2(msg_yellow)
-        if len(mask_yellow.shape) == 3:
-            mask_yellow = cv2.cvtColor(mask_yellow, cv2.COLOR_BGR2GRAY)
-        #######
-        
 
         # 빨간 테두리 그리기 (원본 이미지 복사본에)
         img_roi = img_compensated.copy()
         pts = np.array([
-        [61, 0],  # 왼쪽 위
-        [0, 720],  # 왼쪽 아래
-        [1280, 720],  # 오른쪽 아래     
-        [1114, 0]   # 오른쪽 위
+            [340, 720],  # 왼쪽 아래
+            [840, 720],   # 오른쪽 아래
+            [720, 360],  # 오른쪽 위
+            [460, 360]   # 왼쪽 위
         ], np.int32)
-        # pts = np.array([
-        # [460, 360],  # 왼쪽 위
-        # [340, 720],  # 왼쪽 아래
-        # [840, 720],  # 오른쪽 아래     
-        # [720, 360]   # 오른쪽 위
-        # ], np.int32)
         pts = pts.reshape((-1, 1, 2))
         cv2.polylines(img_roi, [pts], isClosed=True, color=(0, 0, 255), thickness=5)  # 빨간색( BGR = (0,0,255) ) 테두리
 
 
         # 마스크별 픽셀 개수 출력 (디버깅용)
-        # white_pixel_count = np.count_nonzero(mask_white)
-        # yellow_pixel_count = np.count_nonzero(mask_yellow)
-        # self.get_logger().info(f"White mask pixel count: {white_pixel_count}, Yellow mask pixel count: {yellow_pixel_count}")
+        white_pixel_count = np.count_nonzero(mask_white)
+        yellow_pixel_count = np.count_nonzero(mask_yellow)
+        self.get_logger().info(f"White mask pixel count: {white_pixel_count}, Yellow mask pixel count: {yellow_pixel_count}")
 
         # 2. Bird's-Eye View로 원근 변환
         warped_compensated = cv2.warpPerspective(img_compensated, self.M, (1280, 720), flags=cv2.INTER_LINEAR)
@@ -165,16 +140,16 @@ class DetectLane(Node):
             right_fitx, self.right_fit = self.fit_from_lines(self.right_fit, warped_white_mask)
 
         # =================================================================
-        # =================================================================
         # [수정된 부분] 여기서 안전장치를 추가합니다.
-        # # 차선 감지에 하나라도 실패했다면(None이 반환되었다면), 더 이상 진행하지 않고 현재 프레임 처리를 중단합니다.
-        # if self.left_fit is None or self.right_fit is None:
-        #     self.get_logger().warn('Lane detection failed, skipping frame.')
+        # =================================================================
+        # 차선 감지에 하나라도 실패했다면(None이 반환되었다면), 더 이상 진행하지 않고 현재 프레임 처리를 중단합니다.
+        if self.left_fit is None or self.right_fit is None:
+            self.get_logger().warn('Lane detection failed, skipping frame.')
             
-        #     # 차선을 못 찾았을 경우, 보정된 원본 이미지만이라도 발행하여 상태를 확인할 수 있습니다.
-        #     # (이 줄의 주석을 해제하면 됩니다.)
-        #     self.pub_image_lane.publish(msg_compensated)
-        #     return
+            # 차선을 못 찾았을 경우, 보정된 원본 이미지만이라도 발행하여 상태를 확인할 수 있습니다.
+            # (이 줄의 주석을 해제하면 됩니다.)
+            # self.pub_image_lane.publish(msg_compensated)
+            return
         # =================================================================
 
         # 4. 결과 그리기 및 최종 정보 발행 (안전장치를 통과한 경우에만 실행됨)
@@ -212,10 +187,7 @@ class DetectLane(Node):
                 
         lane_inds = np.concatenate(lane_inds)
         x, y = nonzerox[lane_inds], nonzeroy[lane_inds]
-    
-     # [디버깅 로그 추가] 슬라이딩 윈도우를 통해 최종적으로 몇 개의 픽셀이 선택되었는지 출력합니다.
-        self.get_logger().info(f"[{left_or_right.upper()}] Pixels selected by sliding window: {len(x)}")
-    
+        
         # [수정된 부분 시작]
         # 픽셀이 충분히 감지되었는지 확인
         if len(x) < minpix * 3: # 안정적인 피팅을 위해 최소 픽셀 수 조건 강화
@@ -264,76 +236,34 @@ class DetectLane(Node):
 
     def draw_lane_and_publish(self, base_image, yellow_mask, white_mask, left_fitx, right_fitx):
         """결과를 시각화하고 최종 정보를 발행합니다."""
-        self.get_logger().info("--- Entering draw_lane_and_publish ---")
-
         ploty = np.linspace(0, base_image.shape[0] - 1, base_image.shape[0])
-
+        
+        # 그리기용 빈 이미지 생성
         warp_zero = np.zeros_like(yellow_mask).astype(np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
-        self.get_logger().info("Step A: Blank warp image created.")
 
+        # 차선 검출 영역 및 신뢰도 판단
         yellow_detected = np.count_nonzero(yellow_mask) > 3000
         white_detected = np.count_nonzero(white_mask) > 3000
 
         lane_state = 0
-        if yellow_detected and white_detected:
-            lane_state = 2
-        elif yellow_detected:
-            lane_state = 1
-        elif white_detected:
-            lane_state = 3
-        self.get_logger().info(f"Step B: Lane state calculated: {lane_state}")
+        if yellow_detected and white_detected: lane_state = 2
+        elif yellow_detected: lane_state = 1
+        elif white_detected: lane_state = 3
 
+        # 중앙선 계산 및 그리기
         centerx = None
-        if (
-        lane_state    == 2
-        and left_fitx is not None
-        and right_fitx is not None
-        and ploty     is not None
-        ):
-
-            # safe to compute min_len
-            min_len = min(len(left_fitx), len(right_fitx), len(ploty))
-            left_fitx = left_fitx[:min_len]
-            right_fitx = right_fitx[:min_len]
-            ploty     = ploty[:min_len]
-
+        if lane_state == 2:
             centerx = np.mean([left_fitx, right_fitx], axis=0)
-
-            pts_left  = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+            pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
             pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-            pts       = np.hstack((pts_left, pts_right))
-            cv2.fillPoly(color_warp, np.int32([pts]), (0, 255, 0))
-
-        # fallback to single-line state if we only detected one side
-        elif lane_state == 2:
-            # you saw state==2, but one side is missing → degrade to single line
-            if left_fitx is not None and ploty is not None:
-                centerx = left_fitx + base_image.shape[1]//2
-            elif right_fitx is not None and ploty is not None:
-                centerx = right_fitx - base_image.shape[1]//2
-            else:
-                # zero fallback, or just skip this frame
-                return
-        # if lane_state == 2:
-        #     # 두 배열의 길이가 다를 수 있으므로 에러 방지를 위해 최소 길이 기준으로 잘라서 평균 계산
-        #     min_len = min(len(left_fitx), len(right_fitx), len(ploty))
-        #     left_fitx = left_fitx[:min_len]
-        #     right_fitx = right_fitx[:min_len]
-        #     ploty = ploty[:min_len]
-
-        #     centerx = np.mean([left_fitx, right_fitx], axis=0)
-
-        #     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-        #     pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-        #     pts = np.hstack((pts_left, pts_right))
-        #     cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
-        elif lane_state == 1 and left_fitx is not None:
-            centerx = left_fitx + 320
-        elif lane_state == 3 and right_fitx is not None:
-            centerx = right_fitx - 320
-
-        # 차선 시각화 (yellow, white, center)
+            pts = np.hstack((pts_left, pts_right))
+            cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0)) # 주행 가능 영역
+        elif lane_state == 1:
+            centerx = left_fitx + 320 # 차선 폭만큼 이동 (튜닝 필요)
+        elif lane_state == 3:
+            centerx = right_fitx - 320 # 차선 폭만큼 이동 (튜닝 필요)
+            
         if yellow_detected:
             pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
             cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 0), thickness=25)
@@ -341,37 +271,21 @@ class DetectLane(Node):
             pts_right = np.array([np.transpose(np.vstack([right_fitx, ploty]))])
             cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(0, 0, 255), thickness=25)
         if centerx is not None:
-            pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
-            cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
-        self.get_logger().info("Step C: Drawing on BEV image complete.")
+             pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
+             cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
 
-        # 원근 복원 및 합성
+        # 원근을 다시 원래대로 되돌리기
         unwarped_lane = cv2.warpPerspective(color_warp, self.Minv, (base_image.shape[1], base_image.shape[0]))
+        # 원본 이미지와 합성
         final_image = cv2.addWeighted(base_image, 1, unwarped_lane, 0.5, 0)
-        self.get_logger().info("Step D: Un-warping and composition complete.")
-
-        # 최종 이미지 퍼블리시
-        final_image_msg = self.cvBridge.cv2_to_compressed_imgmsg(final_image, 'png')
-        self.pub_image_lane.publish(final_image_msg)
-        self.get_logger().info("Step E: Published final detected image.")
-
-        # 상태 퍼블리시
-        lane_state_msg = UInt8(data=lane_state)
-        self.pub_lane_state.publish(lane_state_msg)
-        self.get_logger().info("Step F: Published lane state.")
-
-        # 중심 위치 퍼블리시
+        
+        # 최종 정보 발행
+        self.pub_image_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(final_image))
+        self.pub_lane_state.publish(UInt8(data=lane_state))
         if centerx is not None:
-            if len(centerx) > 400:  # 안전하게 인덱스 접근
-                desired_center = centerx[400]
-                self.pub_lane_center.publish(Float64(data=desired_center))
-                self.get_logger().info("Step G: Published lane center.")
-            else:
-                self.get_logger().warn("centerx 길이가 400보다 짧아 lane center 퍼블리시 생략됨.")
-
-        self.get_logger().info("--- Leaving draw_lane_and_publish ---")
-
-
+            # 차량 제어에 사용할 특정 지점의 중앙값 발행 (예: 이미지의 y=400 지점)
+            desired_center = centerx[400]
+            self.pub_lane_center.publish(Float64(data=desired_center))
 
 def main(args=None):
     rclpy.init(args=args)

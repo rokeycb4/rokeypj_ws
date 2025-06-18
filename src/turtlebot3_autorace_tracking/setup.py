@@ -24,6 +24,8 @@ setup(
         'console_scripts': [
 		'control_lane = turtlebot3_autorace_tracking.control_lane:main',
 		'control_moving = turtlebot3_autorace_tracking.control_moving:main',
+		'image_compensation = turtlebot3_autorace_tracking.image_compensation:main',
+		'detect_bev = turtlebot3_autorace_tracking.detect_bev:main',
         ],
     },
 )
