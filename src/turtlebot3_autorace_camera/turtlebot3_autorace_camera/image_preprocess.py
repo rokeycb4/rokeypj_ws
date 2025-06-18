@@ -33,19 +33,9 @@ class ImagePreprocessor(Node):
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if self.use_preprocessing:
-            # LAB 변환 → CLAHE 대비보정 → 블러 → 샤프닝
-            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            cl = clahe.apply(l)
-            lab = cv2.merge((cl, a, b))
-            enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-            blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
-            kernel_sharpening = np.array([[-1, -1, -1],
-                                           [-1, 9, -1],
-                                           [-1, -1, -1]])
-            processed = cv2.filter2D(blurred, -1, kernel_sharpening)
-            self.get_logger().info('전처리 적용됨')
+            # 대비 증가(alpha=1.5), 밝기 감소(beta=-50)
+            processed = cv2.convertScaleAbs(frame, alpha=1.5, beta=-50)
+            self.get_logger().info('전처리 적용됨: 대비 증가 + 밝기 감소')
         else:
             processed = frame
             self.get_logger().info('전처리 미적용 (원본 그대로)')
