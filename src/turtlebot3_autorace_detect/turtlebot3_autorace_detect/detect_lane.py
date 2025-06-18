@@ -313,132 +313,6 @@ class DetectLane(Node):
 
     #     self.make_lane(cv_image, white_fraction, yellow_fraction)
 
-    # def maskWhiteLane(self, image):
-
-    #     image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
-    #     image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
-
-    #     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    #     Hue_l = self.hue_white_l
-    #     Hue_h = self.hue_white_h
-    #     Saturation_l = self.saturation_white_l
-    #     Saturation_h = self.saturation_white_h
-    #     Lightness_l = self.lightness_white_l
-    #     Lightness_h = self.lightness_white_h
-
-    #     lower_white = np.array([Hue_l, Saturation_l, Lightness_l])
-    #     upper_white = np.array([Hue_h, Saturation_h, Lightness_h])
-
-    #     mask = cv2.inRange(hsv, lower_white, upper_white)
-
-    #     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
-
-    #     fraction_num = np.count_nonzero(mask)
-
-    #     if not self.is_calibration_mode:
-    #         if fraction_num > 35000:
-    #             if self.lightness_white_l < 250:
-    #                 self.lightness_white_l += 5
-    #         elif fraction_num < 5000:
-    #             if self.lightness_white_l > 50:
-    #                 self.lightness_white_l -= 5
-
-    #     how_much_short = 0
-
-    #     for i in range(0, 600):
-    #         if np.count_nonzero(mask[i, ::]) > 0:
-    #             how_much_short += 1
-
-    #     how_much_short = 600 - how_much_short
-
-    #     if how_much_short > 100:
-    #         if self.reliability_white_line >= 5:
-    #             self.reliability_white_line -= 5
-    #     elif how_much_short <= 100:
-    #         if self.reliability_white_line <= 99:
-    #             self.reliability_white_line += 5
-
-    #     msg_white_line_reliability = UInt8()
-    #     msg_white_line_reliability.data = self.reliability_white_line
-    #     self.pub_white_line_reliability.publish(msg_white_line_reliability)
-
-    #     if self.is_calibration_mode:
-    #         if self.pub_image_type == 'compressed':
-    #             self.pub_image_white_lane.publish(
-    #                 self.cvBridge.cv2_to_compressed_imgmsg(mask, 'jpg')
-    #                 )
-
-    #         elif self.pub_image_type == 'raw':
-    #             self.pub_image_white_lane.publish(
-    #                 self.cvBridge.cv2_to_imgmsg(mask, 'bgr8')
-    #                 )
-
-    #     return fraction_num, mask
-
-    # def maskYellowLane(self, image):
-        
-    #     image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
-    #     image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
-
-    #     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    #     Hue_l = self.hue_yellow_l
-    #     Hue_h = self.hue_yellow_h
-    #     Saturation_l = self.saturation_yellow_l
-    #     Saturation_h = self.saturation_yellow_h
-    #     Lightness_l = self.lightness_yellow_l
-    #     Lightness_h = self.lightness_yellow_h
-
-    #     lower_yellow = np.array([Hue_l, Saturation_l, Lightness_l])
-    #     upper_yellow = np.array([Hue_h, Saturation_h, Lightness_h])
-
-    #     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-    #     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
-
-    #     fraction_num = np.count_nonzero(mask)
-
-    #     if self.is_calibration_mode:
-    #         if fraction_num > 35000:
-    #             if self.lightness_yellow_l < 250:
-    #                 self.lightness_yellow_l += 20
-    #         elif fraction_num < 5000:
-    #             if self.lightness_yellow_l > 90:
-    #                 self.lightness_yellow_l -= 20
-
-    #     how_much_short = 0
-
-    #     for i in range(0, 600):
-    #         if np.count_nonzero(mask[i, ::]) > 0:
-    #             how_much_short += 1
-
-    #     how_much_short = 600 - how_much_short
-
-    #     if how_much_short > 100:
-    #         if self.reliability_yellow_line >= 5:
-    #             self.reliability_yellow_line -= 5
-    #     elif how_much_short <= 100:
-    #         if self.reliability_yellow_line <= 99:
-    #             self.reliability_yellow_line += 5
-
-    #     msg_yellow_line_reliability = UInt8()
-    #     msg_yellow_line_reliability.data = self.reliability_yellow_line
-    #     self.pub_yellow_line_reliability.publish(msg_yellow_line_reliability)
-
-    #     if self.is_calibration_mode:
-    #         if self.pub_image_type == 'compressed':
-    #             self.pub_image_yellow_lane.publish(
-    #                 self.cvBridge.cv2_to_compressed_imgmsg(mask, 'jpg')
-    #                 )
-
-    #         elif self.pub_image_type == 'raw':
-    #             self.pub_image_yellow_lane.publish(
-    #                 self.cvBridge.cv2_to_imgmsg(mask, 'bgr8')
-    #                 )
-
-    #     return fraction_num, mask
-
     # def fit_from_lines(self, lane_fit, image):
     #     nonzero = image.nonzero()
     #     nonzeroy = np.array(nonzero[0])
@@ -616,75 +490,364 @@ class DetectLane(Node):
 
     #         self.pub_image_lane.publish(self.cvBridge.cv2_to_imgmsg(final, 'bgr8'))
 
-    def preprocess_image(self, image):
-        """이미지 전처리 함수"""
-        blurred = cv2.GaussianBlur(image, (5, 5), 0)
-        gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        enhanced = clahe.apply(gray)
-        return enhanced
+    # def maskWhiteLane(self, image):
 
-    def create_roi_mask(self, image):
-        """ROI 마스크 생성"""
-        mask = np.zeros_like(image)
-        cv2.fillPoly(mask, self.roi_vertices, 255)
-        return cv2.bitwise_and(image, mask)
+    #     image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
+    #     image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
+
+    #     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    #     Hue_l = self.hue_white_l
+    #     Hue_h = self.hue_white_h
+    #     Saturation_l = self.saturation_white_l
+    #     Saturation_h = self.saturation_white_h
+    #     Lightness_l = self.lightness_white_l
+    #     Lightness_h = self.lightness_white_h
+
+    #     lower_white = np.array([Hue_l, Saturation_l, Lightness_l])
+    #     upper_white = np.array([Hue_h, Saturation_h, Lightness_h])
+
+    #     mask = cv2.inRange(hsv, lower_white, upper_white)
+
+    #     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
+
+    #     fraction_num = np.count_nonzero(mask)
+
+    #     if not self.is_calibration_mode:
+    #         if fraction_num > 35000:
+    #             if self.lightness_white_l < 250:
+    #                 self.lightness_white_l += 5
+    #         elif fraction_num < 5000:
+    #             if self.lightness_white_l > 50:
+    #                 self.lightness_white_l -= 5
+
+    #     how_much_short = 0
+
+    #     for i in range(0, 600):
+    #         if np.count_nonzero(mask[i, ::]) > 0:
+    #             how_much_short += 1
+
+    #     how_much_short = 600 - how_much_short
+
+    #     if how_much_short > 100:
+    #         if self.reliability_white_line >= 5:
+    #             self.reliability_white_line -= 5
+    #     elif how_much_short <= 100:
+    #         if self.reliability_white_line <= 99:
+    #             self.reliability_white_line += 5
+
+    #     msg_white_line_reliability = UInt8()
+    #     msg_white_line_reliability.data = self.reliability_white_line
+    #     self.pub_white_line_reliability.publish(msg_white_line_reliability)
+
+    #     if self.is_calibration_mode:
+    #         if self.pub_image_type == 'compressed':
+    #             self.pub_image_white_lane.publish(
+    #                 self.cvBridge.cv2_to_compressed_imgmsg(mask, 'jpg')
+    #                 )
+
+    #         elif self.pub_image_type == 'raw':
+    #             self.pub_image_white_lane.publish(
+    #                 self.cvBridge.cv2_to_imgmsg(mask, 'bgr8')
+    #                 )
+
+    #     return fraction_num, mask
+
+    # def maskYellowLane(self, image):
+        
+    #     image = cv2.GaussianBlur(image, (5,5), 0)   # gaussian blur
+    #     image = cv2.convertScaleAbs(image, alpha=1.2, beta=10)  # color contrast
+
+    #     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    #     Hue_l = self.hue_yellow_l
+    #     Hue_h = self.hue_yellow_h
+    #     Saturation_l = self.saturation_yellow_l
+    #     Saturation_h = self.saturation_yellow_h
+    #     Lightness_l = self.lightness_yellow_l
+    #     Lightness_h = self.lightness_yellow_h
+
+    #     lower_yellow = np.array([Hue_l, Saturation_l, Lightness_l])
+    #     upper_yellow = np.array([Hue_h, Saturation_h, Lightness_h])
+
+    #     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+    #     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    # mophology calculation
+
+    #     fraction_num = np.count_nonzero(mask)
+
+    #     if self.is_calibration_mode:
+    #         if fraction_num > 35000:
+    #             if self.lightness_yellow_l < 250:
+    #                 self.lightness_yellow_l += 20
+    #         elif fraction_num < 5000:
+    #             if self.lightness_yellow_l > 90:
+    #                 self.lightness_yellow_l -= 20
+
+    #     how_much_short = 0
+
+    #     for i in range(0, 600):
+    #         if np.count_nonzero(mask[i, ::]) > 0:
+    #             how_much_short += 1
+
+    #     how_much_short = 600 - how_much_short
+
+    #     if how_much_short > 100:
+    #         if self.reliability_yellow_line >= 5:
+    #             self.reliability_yellow_line -= 5
+    #     elif how_much_short <= 100:
+    #         if self.reliability_yellow_line <= 99:
+    #             self.reliability_yellow_line += 5
+
+    #     msg_yellow_line_reliability = UInt8()
+    #     msg_yellow_line_reliability.data = self.reliability_yellow_line
+    #     self.pub_yellow_line_reliability.publish(msg_yellow_line_reliability)
+
+    #     if self.is_calibration_mode:
+    #         if self.pub_image_type == 'compressed':
+    #             self.pub_image_yellow_lane.publish(
+    #                 self.cvBridge.cv2_to_compressed_imgmsg(mask, 'jpg')
+    #                 )
+
+    #         elif self.pub_image_type == 'raw':
+    #             self.pub_image_yellow_lane.publish(
+    #                 self.cvBridge.cv2_to_imgmsg(mask, 'bgr8')
+    #                 )
+
+    #     return fraction_num, mask
+
+    # def sliding_window(self, img_w, left_or_right):
+    #     histogram = np.sum(img_w[int(img_w.shape[0] / 2):, :], axis=0)
+
+    #     out_img = np.dstack((img_w, img_w, img_w)) * 255
+
+    #     midpoint = np.int_(histogram.shape[0] / 2)
+
+    #     if left_or_right == 'left':
+    #         lane_base = np.argmax(histogram[:midpoint])
+    #     elif left_or_right == 'right':
+    #         lane_base = np.argmax(histogram[midpoint:]) + midpoint
+
+    #     nwindows = 20
+
+    #     window_height = np.int_(img_w.shape[0] / nwindows)
+
+    #     nonzero = img_w.nonzero()
+    #     nonzeroy = np.array(nonzero[0])
+    #     nonzerox = np.array(nonzero[1])
+
+    #     x_current = lane_base
+
+    #     margin = 50
+
+    #     minpix = 50
+
+    #     lane_inds = []
+
+    #     for window in range(nwindows):
+    #         win_y_low = img_w.shape[0] - (window + 1) * window_height
+    #         win_y_high = img_w.shape[0] - window * window_height
+    #         win_x_low = x_current - margin
+    #         win_x_high = x_current + margin
+
+    #         cv2.rectangle(
+    #             out_img, (win_x_low, win_y_low), (win_x_high, win_y_high), (0, 255, 0), 2)
+
+    #         good_lane_inds = (
+    #             (nonzeroy >= win_y_low) &
+    #             (nonzeroy < win_y_high) &
+    #             (nonzerox >= win_x_low) &
+    #             (nonzerox < win_x_high)
+    #             ).nonzero()[0]
+
+    #         lane_inds.append(good_lane_inds)
+
+    #         if len(good_lane_inds) > minpix:
+    #             x_current = np.int_(np.mean(nonzerox[good_lane_inds]))
+
+    #     lane_inds = np.concatenate(lane_inds)
+
+    #     x = nonzerox[lane_inds]
+    #     y = nonzeroy[lane_inds]
+
+    #     try:
+    #         lane_fit = np.polyfit(y, x, 2)
+    #         # self.lane_fit_bef = lane_fit
+
+    #         # save line information
+    #         if left_or_right == 'left':
+    #             self.left_fit = lane_fit
+    #             self.left_fitx = lane_fitx
+    #         else:
+    #             self.right_fit = lane_fit
+    #             self.right_fitx = lane_fitx
+
+    #     except Exception:
+    #         # lane_fit = self.lane_fit_bef
+    #         lane_fit = self.left_fit if left_or_right == 'left' else self.right_fit
+    #         lane_fitx = self.left_fitx if left_or_right == 'left' else self.right_fitx
+
+    #     ploty = np.linspace(0, img_w.shape[0] - 1, img_w.shape[0])
+    #     lane_fitx = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
+
+    #     return lane_fitx, lane_fit
+
+    def preprocess_image(self, image):
+        """이미지 전처리"""
+        # 가우시안 블러로 노이즈 제거
+        blurred = cv2.GaussianBlur(image, (5, 5), 0)
+        
+        # 대비 향상
+        enhanced = cv2.convertScaleAbs(blurred, alpha=1.2, beta=10)
+        
+        return enhanced
 
     def detect_edges(self, image):
         """에지 검출"""
-        edges = cv2.Canny(image, self.canny_low, self.canny_high)
+        # 그레이스케일 변환
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # 적응형 임계값 처리
+        binary = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY_INV, 11, 2
+        )
+        
+        # Canny 에지 검출
+        edges = cv2.Canny(binary, self.canny_low, self.canny_high)
+        
+        # 노이즈 제거
         kernel = np.ones((3,3), np.uint8)
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
+        
         return edges
 
-    def detect_lines(self, edges):
-        """허프 변환을 통한 직선 검출"""
-        return cv2.HoughLinesP(edges, 1, np.pi/180, 
-                            threshold=self.hough_threshold,
-                            minLineLength=self.min_line_length,
-                            maxLineGap=self.max_line_gap)
-
-    def separate_lines(self, lines):
-        """검출된 선을 좌/우 차선으로 분리"""
-        left_lines = []
-        right_lines = []
+    def create_roi_mask(self, image):
+        """ROI 마스크 생성"""
+        height, width = image.shape[:2]
         
-        if lines is None:
-            return left_lines, right_lines
-
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            if x2 == x1:
-                continue
-            slope = (y2 - y1) / (x2 - x1)
-            
-            if slope < -0.3:  # 왼쪽 차선
-                left_lines.append(line)
-            elif slope > 0.3:  # 오른쪽 차선
-                right_lines.append(line)
-                
-        return left_lines, right_lines
+        # ROI 영역 정의 (사다리꼴 형태)
+        roi_vertices = np.array([
+            [(0, height),
+            (width * 0.4, height * 0.6),  # 좌측 상단
+            (width * 0.6, height * 0.6),   # 우측 상단
+            (width, height)]
+        ], dtype=np.int32)
+        
+        # 마스크 생성
+        mask = np.zeros_like(image)
+        cv2.fillPoly(mask, roi_vertices, (255, 255, 255))
+        
+        return cv2.bitwise_and(image, mask)
     
-    def fit_from_lines(self, lines, image_shape):
+    def maskWhiteLane(self, image):
+        """흰색 차선 검출"""
+        # 전처리 적용
+        image = self.preprocess_image(image)
+        # ROI 마스크 적용
+        image = self.create_roi_mask(image)
+        
+        # HSV 변환 및 차선 검출
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_white = np.array([self.hue_white_l, self.saturation_white_l, self.lightness_white_l])
+        upper_white = np.array([self.hue_white_h, self.saturation_white_h, self.lightness_white_h])
+        
+        mask = cv2.inRange(hsv, lower_white, upper_white)
+        
+        # 모폴로지 연산으로 노이즈 제거 및 차선 강화
+        kernel = np.ones((3,3), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        
+        fraction_num = np.count_nonzero(mask)
+    
+        # 신뢰도 계산
+        how_much_short = 0
+        for i in range(0, 600):
+            if np.count_nonzero(mask[i, ::]) > 0:
+                how_much_short += 1
+        how_much_short = 600 - how_much_short
+        
+        if how_much_short > 100:
+            if self.reliability_white_line >= 5:
+                self.reliability_white_line -= 5
+        elif how_much_short <= 100:
+            if self.reliability_white_line <= 99:
+                self.reliability_white_line += 5
+                
+        msg_white_line_reliability = UInt8()
+        msg_white_line_reliability.data = self.reliability_white_line
+        self.pub_white_line_reliability.publish(msg_white_line_reliability)
+        
+        return fraction_num, mask
+
+    def maskYellowLane(self, image):
+        """노란색 차선 검출"""
+        # 전처리 적용
+        image = self.preprocess_image(image)
+        # ROI 마스크 적용
+        image = self.create_roi_mask(image)
+        
+        # HSV 변환 및 차선 검출
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_yellow = np.array([self.hue_yellow_l, self.saturation_yellow_l, self.lightness_yellow_l])
+        upper_yellow = np.array([self.hue_yellow_h, self.saturation_yellow_h, self.lightness_yellow_h])
+        
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        
+        # 모폴로지 연산으로 노이즈 제거 및 차선 강화
+        kernel = np.ones((3,3), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        
+        fraction_num = np.count_nonzero(mask)
+    
+        # 신뢰도 계산
+        how_much_short = 0
+        for i in range(0, 600):
+            if np.count_nonzero(mask[i, ::]) > 0:
+                how_much_short += 1
+        how_much_short = 600 - how_much_short
+        
+        if how_much_short > 100:
+            if self.reliability_yellow_line >= 5:
+                self.reliability_yellow_line -= 5
+        elif how_much_short <= 100:
+            if self.reliability_yellow_line <= 99:
+                self.reliability_yellow_line += 5
+                
+        msg_yellow_line_reliability = UInt8()
+        msg_yellow_line_reliability.data = self.reliability_yellow_line
+        self.pub_yellow_line_reliability.publish(msg_yellow_line_reliability)
+        
+        return fraction_num, mask
+
+    def fit_from_lines(self, cv_image, left_fit, right_fit):
         """차선 피팅"""
-        if not lines:
-            return None, None
-            
-        points = np.concatenate([line[0] for line in lines])
-        x = points[:, [0, 2]].flatten()
-        y = points[:, [1, 3]].flatten()
+        height = cv_image.shape[0]
+        ploty = np.linspace(0, height - 1, height)
         
         try:
-            coefficients = np.polyfit(y, x, 2)
-            ploty = np.linspace(0, image_shape[0] - 1, image_shape[0])
-            fitx = coefficients[0] * ploty ** 2 + coefficients[1] * ploty + coefficients[2]
+            # 2차 다항식으로 곡선 피팅
+            left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
+            right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
             
-            return fitx, coefficients
+            # 차선 중심점 계산
+            center_fitx = (left_fitx + right_fitx) / 2
+            
+            # 이전 프레임의 중심점과 현재 중심점을 보간
+            if self.prev_centerx is not None:
+                center_fitx = self.alpha * center_fitx + (1 - self.alpha) * self.prev_centerx
+            
+            self.prev_centerx = center_fitx
+            
+            return np.array([np.transpose(np.vstack([left_fitx, ploty]))])
         except:
-            return None, None
+            return None
 
     def make_lane(self, cv_image, left_fit, right_fit):
-        """차선 시각화"""
+        """개선된 차선 시각화"""
         warp_zero = np.zeros((cv_image.shape[0], cv_image.shape[1], 1), dtype=np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
         color_warp_lines = np.dstack((warp_zero, warp_zero, warp_zero))
@@ -693,27 +856,33 @@ class DetectLane(Node):
         lane_state = UInt8()
         centerx = np.array([cv_image.shape[1] / 2] * cv_image.shape[0])
         
+        # 곡선 차선을 더 부드럽게 표시
         if left_fit is not None:
             pts_left = np.array([np.flipud(np.transpose(np.vstack([left_fit, ploty])))])
-            cv2.polylines(color_warp_lines, np.int_([pts_left]), False, (0, 0, 255), 25)
+            # 부드러운 곡선으로 표시
+            cv2.polylines(color_warp_lines, np.int_([pts_left]), False, (0, 0, 255), 25, cv2.LINE_AA)
             
         if right_fit is not None:
             pts_right = np.array([np.transpose(np.vstack([right_fit, ploty]))])
-            cv2.polylines(color_warp_lines, np.int_([pts_right]), False, (255, 255, 0), 25)
+            cv2.polylines(color_warp_lines, np.int_([pts_right]), False, (255, 255, 0), 25, cv2.LINE_AA)
             
         if left_fit is not None and right_fit is not None:
+            # 중심선 계산 개선
             centerx = np.mean([left_fit, right_fit], axis=0)
             pts = np.hstack((pts_left, pts_right))
             pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
             
-            cv2.polylines(color_warp_lines, np.int_([pts_center]), False, (0, 255, 255), 12)
+            # 부드러운 중심선 표시
+            cv2.polylines(color_warp_lines, np.int_([pts_center]), False, (0, 255, 255), 12, cv2.LINE_AA)
             cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
             
             lane_state.data = 2
         elif right_fit is not None:
+            # 우측 차선만 있을 때의 중심선 계산 개선
             centerx = np.subtract(right_fit, 280)
             lane_state.data = 3
         elif left_fit is not None:
+            # 좌측 차선만 있을 때의 중심선 계산 개선
             centerx = np.add(left_fit, 280)
             lane_state.data = 1
         else:
@@ -721,12 +890,14 @@ class DetectLane(Node):
             
         self.pub_lane_state.publish(lane_state)
         
-        final = cv2.addWeighted(cv_image, 1, color_warp, 0.2, 0)
+        # 시각화 효과 개선
+        final = cv2.addWeighted(cv_image, 1, color_warp, 0.3, 0)  # 투명도 조정
         final = cv2.addWeighted(final, 1, color_warp_lines, 1, 0)
         
         if lane_state.data > 0:
             msg_desired_center = Float64()
-            msg_desired_center.data = float(centerx.item(350))
+            # 중심점 위치 조정 (더 앞쪽으로)
+            msg_desired_center.data = float(centerx.item(300))  # 350에서 300으로 조정
             self.pub_lane.publish(msg_desired_center)
             
         if self.pub_image_type == 'compressed':
@@ -735,79 +906,83 @@ class DetectLane(Node):
             self.pub_image_lane.publish(self.cvBridge.cv2_to_imgmsg(final, 'bgr8'))
 
     def sliding_window(self, img_w, left_or_right):
-        histogram = np.sum(img_w[int(img_w.shape[0] / 2):, :], axis=0)
-
+        """슬라이딩 윈도우"""
+        histogram = np.sum(img_w[int(img_w.shape[0]/2):, :], axis=0)
+        
         out_img = np.dstack((img_w, img_w, img_w)) * 255
-
-        midpoint = np.int_(histogram.shape[0] / 2)
-
+        
+        midpoint = np.int_(histogram.shape[0]/2)
+        
         if left_or_right == 'left':
-            lane_base = np.argmax(histogram[:midpoint])
+            # 좌측 차선 검색 영역 제한
+            search_range = histogram[:midpoint]
+            lane_base = np.argmax(search_range)
         elif left_or_right == 'right':
-            lane_base = np.argmax(histogram[midpoint:]) + midpoint
-
-        nwindows = 20
-
-        window_height = np.int_(img_w.shape[0] / nwindows)
-
+            # 우측 차선 검색 영역 제한
+            search_range = histogram[midpoint:]
+            lane_base = np.argmax(search_range) + midpoint
+        
+        # 윈도우 개수 증가 (더 세밀한 검출)
+        nwindows = 25  # 20에서 25로 증가
+        
+        window_height = np.int_(img_w.shape[0]/nwindows)
+        
         nonzero = img_w.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
-
+        
         x_current = lane_base
-
-        margin = 50
-
-        minpix = 50
-
+        
+        # 윈도우 마진 조정 (곡선 검출 개선)
+        margin = 60  # 50에서 60으로 증가
+        
+        # 최소 픽셀 수 조정
+        minpix = 40  # 50에서 40으로 감소
+        
         lane_inds = []
-
+        
         for window in range(nwindows):
             win_y_low = img_w.shape[0] - (window + 1) * window_height
             win_y_high = img_w.shape[0] - window * window_height
             win_x_low = x_current - margin
             win_x_high = x_current + margin
-
-            cv2.rectangle(
-                out_img, (win_x_low, win_y_low), (win_x_high, win_y_high), (0, 255, 0), 2)
-
-            good_lane_inds = (
-                (nonzeroy >= win_y_low) &
-                (nonzeroy < win_y_high) &
-                (nonzerox >= win_x_low) &
-                (nonzerox < win_x_high)
-                ).nonzero()[0]
-
+            
+            cv2.rectangle(out_img, (win_x_low, win_y_low), (win_x_high, win_y_high), (0, 255, 0), 2)
+            
+            good_lane_inds = ((nonzeroy >= win_y_low) & 
+                            (nonzeroy < win_y_high) & 
+                            (nonzerox >= win_x_low) & 
+                            (nonzerox < win_x_high)).nonzero()[0]
+            
             lane_inds.append(good_lane_inds)
-
+            
             if len(good_lane_inds) > minpix:
                 x_current = np.int_(np.mean(nonzerox[good_lane_inds]))
-
+        
         lane_inds = np.concatenate(lane_inds)
-
+        
         x = nonzerox[lane_inds]
         y = nonzeroy[lane_inds]
-
+        
         try:
+            # 2차 곡선 피팅
             lane_fit = np.polyfit(y, x, 2)
-            # self.lane_fit_bef = lane_fit
-
-            # save line information
+            ploty = np.linspace(0, img_w.shape[0]-1, img_w.shape[0])
+            lane_fitx = lane_fit[0] * ploty**2 + lane_fit[1] * ploty + lane_fit[2]
+            
+            # 피팅 결과 저장
             if left_or_right == 'left':
                 self.left_fit = lane_fit
                 self.left_fitx = lane_fitx
             else:
                 self.right_fit = lane_fit
                 self.right_fitx = lane_fitx
-
+                
         except Exception:
-            # lane_fit = self.lane_fit_bef
+            # 이전 피팅 결과 사용
             lane_fit = self.left_fit if left_or_right == 'left' else self.right_fit
             lane_fitx = self.left_fitx if left_or_right == 'left' else self.right_fitx
-
-        ploty = np.linspace(0, img_w.shape[0] - 1, img_w.shape[0])
-        lane_fitx = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
-
+        
         return lane_fitx, lane_fit
 
     def cbFindLane(self, image_msg):
@@ -823,69 +998,90 @@ class DetectLane(Node):
         else:
             cv_image = self.cvBridge.imgmsg_to_cv2(image_msg, 'bgr8')
 
-        # 이미지 전처리 및 차선 검출
+        # 전처리 적용
+        cv_image = self.preprocess_image(cv_image)
+        cv_image = self.create_roi_mask(cv_image)
+
+        # 1. HSV 기반 차선 검출
+        white_fraction, white_mask = self.maskWhiteLane(cv_image)
+        yellow_fraction, yellow_mask = self.maskYellowLane(cv_image)
+        
+        # HSV 마스크 통합
+        combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
+        
+        # 2. 전처리 및 ROI 적용
         processed = self.preprocess_image(cv_image)
         masked = self.create_roi_mask(processed)
+        
+        # 3. 에지 검출 및 HSV 마스크와 통합
         edges = self.detect_edges(masked)
-        lines = self.detect_lines(edges)
+        final_mask = cv2.bitwise_and(edges, combined_mask)
         
         left_fitx = None
         right_fitx = None
         
-        if lines is not None:
-            # 좌/우 차선 분리 및 피팅
-            left_lines, right_lines = self.separate_lines(lines)
-            
-            try:
-                if len(left_lines) > 0:
-                    left_fitx, left_fit = self.fit_from_lines(left_lines, cv_image.shape)
-                    if left_fitx is not None:
-                        self.mov_avg_left = np.append(self.mov_avg_left, np.array([left_fit]), axis=0)
-                        
-                if len(right_lines) > 0:
-                    right_fitx, right_fit = self.fit_from_lines(right_lines, cv_image.shape)
-                    if right_fitx is not None:
-                        self.mov_avg_right = np.append(self.mov_avg_right, np.array([right_fit]), axis=0)
-                        
-            except Exception:
-                # 에지 기반 검출 실패 시 sliding window 방식 시도
-                if len(left_lines) > 0:
-                    left_fitx, left_fit = self.sliding_window(edges, 'left')
-                    if left_fit is not None:
-                        self.mov_avg_left = np.array([left_fit])
-                        
-                if len(right_lines) > 0:
-                    right_fitx, right_fit = self.sliding_window(edges, 'right')
-                    if right_fit is not None:
-                        self.mov_avg_right = np.array([right_fit])
+        # 차선 검출 시도 (에지 + HSV 기반)
+        try:
+            if self.reliability_yellow_line > 50 and yellow_fraction > 3000:
+                # sliding window 방식으로 왼쪽 차선 검출
+                left_fitx, left_fit = self.sliding_window(final_mask, 'left')
+                if left_fit is not None:
+                    self.mov_avg_left = np.append(self.mov_avg_left, np.array([left_fit]), axis=0)
+
+            if self.reliability_white_line > 50 and white_fraction > 3000:
+                # sliding window 방식으로 오른쪽 차선 검출
+                right_fitx, right_fit = self.sliding_window(final_mask, 'right')
+                if right_fit is not None:
+                    self.mov_avg_right = np.append(self.mov_avg_right, np.array([right_fit]), axis=0)
+                    
+        except Exception as e:
+            self.get_logger().warn(f"Lane detection failed: {str(e)}")
         
-        # 이동 평균 적용
-        MOV_AVG_LENGTH = 5
-        
-        if self.mov_avg_left.shape[0] > 0:
+        # 이동 평균 적용 (기존 코드 유지)
+        MOV_AVG_LENGTH = 7
+        weights = np.exp(-0.5 * np.arange(MOV_AVG_LENGTH))
+        weights = weights / np.sum(weights)
+
+        # 왼쪽 차선 이동 평균
+        if self.mov_avg_left.shape[0] >= MOV_AVG_LENGTH:
+            current_left_data = self.mov_avg_left[-MOV_AVG_LENGTH:][::-1]
             left_fit = np.array([
-                np.mean(self.mov_avg_left[::-1][:, 0][0:MOV_AVG_LENGTH]),
-                np.mean(self.mov_avg_left[::-1][:, 1][0:MOV_AVG_LENGTH]),
-                np.mean(self.mov_avg_left[::-1][:, 2][0:MOV_AVG_LENGTH])
+                np.average(current_left_data[:, 0], weights=weights),
+                np.average(current_left_data[:, 1], weights=weights),
+                np.average(current_left_data[:, 2], weights=weights)
             ])
             ploty = np.linspace(0, cv_image.shape[0] - 1, cv_image.shape[0])
             left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
-            
-        if self.mov_avg_right.shape[0] > 0:
+        elif self.mov_avg_left.shape[0] > 0:
+            left_fit = self.mov_avg_left[-1]
+            ploty = np.linspace(0, cv_image.shape[0] - 1, cv_image.shape[0])
+            left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
+        else:
+            left_fitx = None
+
+        # 오른쪽 차선 이동 평균
+        if self.mov_avg_right.shape[0] >= MOV_AVG_LENGTH:
+            current_right_data = self.mov_avg_right[-MOV_AVG_LENGTH:][::-1]
             right_fit = np.array([
-                np.mean(self.mov_avg_right[::-1][:, 0][0:MOV_AVG_LENGTH]),
-                np.mean(self.mov_avg_right[::-1][:, 1][0:MOV_AVG_LENGTH]),
-                np.mean(self.mov_avg_right[::-1][:, 2][0:MOV_AVG_LENGTH])
+                np.average(current_right_data[:, 0], weights=weights),
+                np.average(current_right_data[:, 1], weights=weights),
+                np.average(current_right_data[:, 2], weights=weights)
             ])
             ploty = np.linspace(0, cv_image.shape[0] - 1, cv_image.shape[0])
             right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
-        
+        elif self.mov_avg_right.shape[0] > 0:
+            right_fit = self.mov_avg_right[-1]
+            ploty = np.linspace(0, cv_image.shape[0] - 1, cv_image.shape[0])
+            right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
+        else:
+            right_fitx = None
+
         # 버퍼 크기 제한
-        if self.mov_avg_left.shape[0] > 1000:
-            self.mov_avg_left = self.mov_avg_left[0:MOV_AVG_LENGTH]
-        if self.mov_avg_right.shape[0] > 1000:
-            self.mov_avg_right = self.mov_avg_right[0:MOV_AVG_LENGTH]
-        
+        if self.mov_avg_left.shape[0] > MOV_AVG_LENGTH:
+            self.mov_avg_left = self.mov_avg_left[-MOV_AVG_LENGTH:]
+        if self.mov_avg_right.shape[0] > MOV_AVG_LENGTH:
+            self.mov_avg_right = self.mov_avg_right[-MOV_AVG_LENGTH:]
+
         # 차선 시각화
         self.make_lane(cv_image, left_fitx, right_fitx)
 
