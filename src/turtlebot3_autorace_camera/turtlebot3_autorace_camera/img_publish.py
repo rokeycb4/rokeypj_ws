@@ -19,6 +19,8 @@ class LaptopCamPublisher(Node):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
+        self.cap.set(cv2.CAP_PROP_EXPOSURE, -6) 
+
         width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.get_logger().info(f"Laptop camera resolution: {width} x {height}")

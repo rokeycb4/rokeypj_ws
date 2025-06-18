@@ -16,7 +16,7 @@ class LCTest(Node):
         self.active = False
 
         self.get_logger().info('Node started, waiting 3 seconds before subscribing...')
-        self.create_timer(3.0, self.start_subscriber)
+        self.create_timer(8.0, self.start_subscriber)
 
     def start_subscriber(self):
         if not self.subscriber_created:
@@ -37,7 +37,7 @@ class LCTest(Node):
 
     def drive_for_seconds(self, center_value):
         start_time = time.time()
-        duration = 3  # 5초 동안 주행
+        duration = 2  # 5초 동안 주행
 
         while time.time() - start_time < duration:
             error = center_value - 500
