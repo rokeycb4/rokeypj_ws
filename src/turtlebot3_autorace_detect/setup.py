@@ -1,6 +1,4 @@
 from glob import glob
-
-from setuptools import find_packages
 from setuptools import setup
 
 package_name = 'turtlebot3_autorace_detect'
@@ -13,7 +11,7 @@ author_emails = ', '.join(email for _, email in authors_info)
 setup(
     name=package_name,
     version='1.2.1',
-    packages=find_packages(),
+    packages=[package_name],  # ★ 가장 중요한 변경
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
@@ -22,6 +20,7 @@ setup(
         ('share/' + package_name + '/param/level', glob('param/level/*.yaml')),
         ('share/' + package_name + '/param/traffic_light', glob('param/traffic_light/*.yaml')),
         ('share/' + package_name + '/image', glob('image/*.png')),
+        ('share/' + package_name + '/model', glob('turtlebot3_autorace_detect/model/*.pth')),  # 모델 weight 포함
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -44,9 +43,11 @@ setup(
             'detect_parking_sign = turtlebot3_autorace_detect.detect_parking_sign:main',
             'detect_traffic_light = turtlebot3_autorace_detect.detect_traffic_light:main',
             'detect_tunnel_sign = turtlebot3_autorace_detect.detect_tunnel_sign:main',
-
-
             'detect_lane2 = turtlebot3_autorace_detect.detect_lane2:main',
+            'detect_ufld = turtlebot3_autorace_detect.detect_ufld:main',
+
+
+            'detect_lane3 = turtlebot3_autorace_detect.detect_lane3:main',
 
         ],
     },

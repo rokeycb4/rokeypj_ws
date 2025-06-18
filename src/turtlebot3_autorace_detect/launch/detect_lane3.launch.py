@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# 기존코드에 토픽만 바꾼거
 
 import os
 
@@ -36,8 +36,8 @@ def generate_launch_description():
     # 노드 실행부
     detect_lane_node = Node(
         package='turtlebot3_autorace_detect',
-        executable='detect_lane2',
-        name='detect_lane2',
+        executable='detect_lane3',
+        name='detect_lane3',
         output='screen',
         parameters=[
             {'is_detection_calibration_mode': calibration_mode},
