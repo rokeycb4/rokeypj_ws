@@ -1,3 +1,150 @@
+###################################################################################################  노란선만 추종
+
+
+
+###################################################################################################  이진화된이미지
+
+
+import cv2
+from cv_bridge import CvBridge
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import CompressedImage
+from std_msgs.msg import Float64, UInt8
+
+
+class DetectLane(Node):
+
+    def __init__(self):
+        super().__init__('detect_lane')
+
+        self.sub_image_original = self.create_subscription(
+            CompressedImage,
+            '/camera/preprocessed/compressed',
+            self.cbFindLane,
+            1
+        )
+
+        self.pub_image_lane = self.create_publisher(CompressedImage, '/detect/image_masked/compressed', 1)
+        self.pub_image_output = self.create_publisher(CompressedImage, '/detect/image_output/compressed', 1)
+        self.pub_lane = self.create_publisher(Float64, '/detect/lane', 1)
+        self.pub_lane_state = self.create_publisher(UInt8, '/detect/lane_state', 1)
+
+        self.cvBridge = CvBridge()
+        self.counter = 1
+        self.left_fit = np.array([0., 0., 300.])
+        self.right_fit = np.array([0., 0., 980.])
+        self.lane_fit_bef = np.array([0., 0., 0.])
+
+        self.mov_avg_left = np.empty((0, 3))
+        self.mov_avg_right = np.empty((0, 3))
+        self.mov_avg_length = 5
+        self.left_fitx = np.array([])
+        self.right_fitx = np.array([])
+
+        self.detection_threshold = 3000
+
+    def cbFindLane(self, msg):
+        if self.counter % 3 != 0:
+            self.counter += 1
+            return
+        self.counter = 1
+
+        np_arr = np.frombuffer(msg.data, np.uint8)
+        cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
+
+        height, width = binary.shape
+        left_mask = np.zeros_like(binary)
+        right_mask = np.zeros_like(binary)
+        margin = 50
+        left_mask[:, :width//2 + margin] = binary[:, :width//2 + margin]
+        right_mask[:, width//2 - margin:] = binary[:, width//2 - margin:]
+
+        ploty = np.linspace(0, height - 1, height)
+
+        if np.count_nonzero(left_mask) > self.detection_threshold:
+            self.left_fitx, self.left_fit = self.fit_from_lines(self.left_fit, left_mask)
+            self.mov_avg_left = np.append(self.mov_avg_left, np.array([self.left_fit]), axis=0)
+
+        if np.count_nonzero(right_mask) > self.detection_threshold:
+            self.right_fitx, self.right_fit = self.fit_from_lines(self.right_fit, right_mask)
+            self.mov_avg_right = np.append(self.mov_avg_right, np.array([self.right_fit]), axis=0)
+
+        if self.mov_avg_left.shape[0] > 0:
+            self.left_fit = np.mean(self.mov_avg_left[-self.mov_avg_length:], axis=0)
+            self.left_fitx = self.left_fit[0] * ploty ** 2 + self.left_fit[1] * ploty + self.left_fit[2]
+
+        if self.mov_avg_right.shape[0] > 0:
+            self.right_fit = np.mean(self.mov_avg_right[-self.mov_avg_length:], axis=0)
+            self.right_fitx = self.right_fit[0] * ploty ** 2 + self.right_fit[1] * ploty + self.right_fit[2]
+
+        half_width = 400
+        centerx = (self.left_fitx + self.right_fitx) / 2 if self.left_fitx.size > 0 and self.right_fitx.size > 0 else \
+                  self.left_fitx + half_width if self.left_fitx.size > 0 else \
+                  self.right_fitx - half_width if self.right_fitx.size > 0 else \
+                  np.array([width / 2] * height)
+
+        cx = float(centerx[height//2])
+        self.pub_lane.publish(Float64(data=cx))
+
+        lane_state = UInt8()
+        lane_state.data = 2 if self.left_fitx.size > 0 and self.right_fitx.size > 0 else \
+                          1 if self.left_fitx.size > 0 else \
+                          3 if self.right_fitx.size > 0 else 0
+        self.pub_lane_state.publish(lane_state)
+
+        self.get_logger().info(f"LaneState: {lane_state.data}, CenterX: {cx:.2f}")
+
+        color_warp = np.zeros_like(cv_image)
+        if self.left_fitx.size > 0:
+            pts_left = np.array([np.flipud(np.transpose(np.vstack([self.left_fitx, ploty])))])
+            cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(0, 0, 255), thickness=10)
+            y_l = int(height * 0.6)
+            x_l = int(self.left_fitx[y_l])
+            cv2.putText(color_warp, 'L', (x_l - 10, y_l - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3, cv2.LINE_AA)
+
+        if self.right_fitx.size > 0:
+            pts_right = np.array([np.transpose(np.vstack([self.right_fitx, ploty]))])
+            cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(255, 255, 0), thickness=10)
+            y_r = int(height * 0.6)
+            x_r = int(self.right_fitx[y_r])
+            cv2.putText(color_warp, 'R', (x_r - 10, y_r - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 3, cv2.LINE_AA)
+
+        if self.left_fitx.size > 0 and self.right_fitx.size > 0:
+            pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
+            cv2.polylines(color_warp, np.int32(pts_center), isClosed=False, color=(255, 0, 0), thickness=2)
+            mid_y = int(height * 0.5)
+            mid_x = int(centerx[mid_y])
+            cv2.putText(color_warp, 'CENTER', (mid_x - 40, mid_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2, cv2.LINE_AA)
+
+        final = cv2.addWeighted(cv_image, 1, color_warp, 0.6, 0)
+        self.pub_image_output.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
+        color_mask = cv2.bitwise_and(cv_image, cv_image, mask=binary)
+        self.pub_image_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(color_mask, 'jpg'))
+
+    def fit_from_lines(self, lane_fit, image):
+        nonzero = image.nonzero()
+        y, x = nonzero[0], nonzero[1]
+        lane_fit = np.polyfit(y, x, 2)
+        ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
+        lane_fitx = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
+        return lane_fitx, lane_fit
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = DetectLane()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
 
 
 ###################################################################################################  마스크만 합치고 차선검출은 따로
