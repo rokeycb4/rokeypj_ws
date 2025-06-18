@@ -33,9 +33,18 @@ class ImagePreprocessor(Node):
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if self.use_preprocessing:
-            # 대비 증가(alpha=1.5), 밝기 감소(beta=-50)
-            processed = cv2.convertScaleAbs(frame, alpha=0.8, beta=-50)
-            self.get_logger().info('전처리 적용됨: 대비 증가 + 밝기 감소')
+            # CLAHE 적용
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            l2 = clahe.apply(l)
+            lab = cv2.merge((l2, a, b))
+            processed = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+            # 추가 밝기/대비 조절
+            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-30)
+
+            self.get_logger().info('전처리 적용됨: CLAHE + 밝기 감소')
         else:
             processed = frame
             self.get_logger().info('전처리 미적용 (원본 그대로)')
