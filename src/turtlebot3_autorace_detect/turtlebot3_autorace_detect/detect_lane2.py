@@ -12,9 +12,6 @@ class DetectLane(Node):
     def __init__(self):
         super().__init__('detect_lane')
 
-        self.sub_image_type = 'compressed'
-        self.pub_image_type = 'compressed'
-
         self.sub_image_original = self.create_subscription(
             CompressedImage,
             '/camera/preprocessed/compressed',
@@ -63,15 +60,14 @@ class DetectLane(Node):
 
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-        # 하드코딩된 HSV 범위
-        lower_white = np.array([0, 0, 150])
-        upper_white = np.array([180, 60, 255])
+        # HSV 범위 변수명 변경
+        white_hsv_min = np.array([0, 0, 150])
+        white_hsv_max = np.array([180, 60, 255])
+        yellow_hsv_min = np.array([20, 40, 100])
+        yellow_hsv_max = np.array([40, 255, 255])
 
-        lower_yellow = np.array([20, 40, 100])
-        upper_yellow = np.array([40, 255, 255])
-
-        mask_white = cv2.inRange(hsv, lower_white, upper_white)
-        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        mask_white = cv2.inRange(hsv, white_hsv_min, white_hsv_max)
+        mask_yellow = cv2.inRange(hsv, yellow_hsv_min, yellow_hsv_max)
         mask = cv2.bitwise_or(mask_white, mask_yellow)
 
         fraction_white = np.count_nonzero(mask_white)
@@ -107,9 +103,9 @@ class DetectLane(Node):
             self.right_fitx = self.right_fit[0] * ploty ** 2 + self.right_fit[1] * ploty + self.right_fit[2]
 
         centerx = (self.left_fitx + self.right_fitx) / 2 if fraction_yellow > 3000 and fraction_white > 3000 else \
-            self.left_fitx + 280 if fraction_yellow > 3000 else \
-            self.right_fitx - 280 if fraction_white > 3000 else \
-            np.array([cv_image.shape[1] / 2] * mask.shape[0])
+                  self.left_fitx + 280 if fraction_yellow > 3000 else \
+                  self.right_fitx - 280 if fraction_white > 3000 else \
+                  np.array([cv_image.shape[1] / 2] * mask.shape[0])
 
         self.pub_lane.publish(Float64(data=centerx[350]))
 
@@ -133,6 +129,24 @@ class DetectLane(Node):
                 cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(255, 255, 0), thickness=10)
             if fraction_yellow > 3000 and fraction_white > 3000:
                 cv2.fillPoly(color_warp, np.int32([pts]), color=(0, 255, 0))
+
+        # 중심선 시각화 및 텍스트
+        if centerx is not None and centerx.size == ploty.size:
+            pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
+            cv2.polylines(color_warp, np.int32(pts_center), isClosed=False, color=(255, 0, 0), thickness=2)
+
+            mid_y = int(mask.shape[0] * 0.5)
+            mid_x = int(centerx[mid_y])
+            cv2.putText(
+                color_warp,
+                'CENTER',
+                (mid_x - 40, mid_y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 0, 0),
+                2,
+                cv2.LINE_AA
+            )
 
         final = cv2.addWeighted(cv_image, 1, color_warp, 0.6, 0)
         self.pub_image_output.publish(self.cvBridge.cv2_to_compressed_imgmsg(final, 'jpg'))
