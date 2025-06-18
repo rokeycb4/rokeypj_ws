@@ -39,11 +39,11 @@ class TurtlebotArucoDetector(Node):
         # 캘리브레이션 파라미터 로드
         self.camera_matrix, self.dist_coeffs = self.load_camera_parameters()
         
-        # 마커 크기 (미터)
-        self.marker_size = 0.04
+        # 마커 크기 (미터) 
+        self.marker_size = 0.05  # 5cm
     
     def load_camera_parameters(self):
-        # 캘리브레이션 파일 경로
+        # 캘리브레이션 파일
         calibration_file = '/home/rokey-jw/rokeypj_ws/src/aruco_yolo/config/calibration_params.yaml'
 
         try:
@@ -66,13 +66,35 @@ class TurtlebotArucoDetector(Node):
         return camera_matrix, dist_coeffs
     
     def detect_markers(self, image):
-        # 가장 일반적으로 사용되는 마커 사전 선택
+        # 마커 사전을 다시 4x4 50개 세트로 변경 (안정성 고려)
         aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        
+        # 디텍터 파라미터 상세 설정
         parameters = cv2.aruco.DetectorParameters()
+        
+        # 파라미터 세부 조정
+        parameters.adaptiveThreshWinSizeMin = 3
+        parameters.adaptiveThreshWinSizeMax = 23
+        parameters.adaptiveThreshWinSizeStep = 10
+        parameters.adaptiveThreshConstant = 7
+        parameters.minMarkerPerimeterRate = 0.03
+        parameters.maxMarkerPerimeterRate = 4.0
+        parameters.polygonalApproxAccuracyRate = 0.05
+        parameters.minCornerDistanceRate = 0.05
+        parameters.minMarkerDistanceRate = 0.05
+        parameters.minDistanceToBorder = 3
+        
+        # ArUco 디텍터 생성
         detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
         
+        # 그레이스케일 변환 (선택적)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
         # 마커 감지
-        corners, ids, _ = detector.detectMarkers(image)
+        corners, ids, rejected = detector.detectMarkers(gray)
+        
+        # 로그 출력 (디버깅용)
+        self.get_logger().info(f"감지된 마커 수: {len(corners) if ids is not None else 0}")
         
         if ids is not None and len(ids) > 0:
             # 마커 그리기 (초록색 테두리)
@@ -105,20 +127,29 @@ class TurtlebotArucoDetector(Node):
                     distance = np.linalg.norm(tvec)
                     
                     # 회전각도 계산
-                    rvec_deg = np.degrees(rvec).flatten()
+                    rotation_matrix, _ = cv2.Rodrigues(rvec)
                     
-                    # 로그 출력
-                    self.get_logger().info(f"Marker ID: {marker_id[0]}")
-                    self.get_logger().info(f"Position: ({tvec[0][0]:.2f}, {tvec[1][0]:.2f}, {tvec[2][0]:.2f})")
-                    self.get_logger().info(f"Rotation: ({rvec_deg[0]:.2f}, {rvec_deg[1]:.2f}, {rvec_deg[2]:.2f})deg")
-                    self.get_logger().info(f"Distance: {distance:.2f}m")
+                    # 각도 계산
+                    sy = np.sqrt(rotation_matrix[0,0] * rotation_matrix[0,0] +  
+                                 rotation_matrix[1,0] * rotation_matrix[1,0])
+                    
+                    singular = sy < 1e-6
+                    
+                    if not singular:
+                        yaw = np.arctan2(rotation_matrix[1,0], rotation_matrix[0,0]) * 180 / np.pi
+                        pitch = np.arctan2(-rotation_matrix[2,0], sy) * 180 / np.pi
+                        roll = np.arctan2(rotation_matrix[2,1], rotation_matrix[2,2]) * 180 / np.pi
+                    else:
+                        yaw = np.arctan2(-rotation_matrix[0,1], rotation_matrix[1,1]) * 180 / np.pi
+                        pitch = np.arctan2(-rotation_matrix[2,0], sy) * 180 / np.pi
+                        roll = 0
                     
                     # 이미지에 정보 표시
                     info_texts = [
                         f"ID: {marker_id[0]}",
-                        f"Pos: ({tvec[0][0]:.2f}, {tvec[1][0]:.2f}, {tvec[2][0]:.2f})",
+                        f"Pos: ({tvec[0][0]*1000:.2f}, {tvec[1][0]*1000:.2f}, {tvec[2][0]*1000:.2f})mm",
                         f"Dist: {distance:.2f}m",
-                        f"Rot: ({rvec_deg[0]:.2f}, {rvec_deg[1]:.2f}, {rvec_deg[2]:.2f})deg"
+                        f"Rot: ({yaw:.2f}, {pitch:.2f}, {roll:.2f})deg"
                     ]
                     
                     colors = [
@@ -133,6 +164,13 @@ class TurtlebotArucoDetector(Node):
                                     (center_x, center_y + idx * 30), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 
                                     0.5, color, 2)
+        else:
+            # 마커가 감지되지 않았을 때 로그 출력
+            self.get_logger().info("마커를 찾을 수 없습니다.")
+            
+            # 거부된 후보 마커 디버깅
+            if len(rejected) > 0:
+                self.get_logger().info(f"거부된 후보 마커 수: {len(rejected)}")
         
         return image
     

@@ -51,10 +51,10 @@ class DetectLane(Node):
         self.left_fitx = self.left_fit[0] * ploty_init**2 + self.left_fit[1] * ploty_init + self.left_fit[2]
         self.lane_fit_bef = np.array([0., 0., 0.])
 
-        self.hsv_yellow_lower = [20, 50, 60]
-        self.hsv_yellow_upper = [40, 255, 255]
+        self.hsv_yellow_lower = [10, 50, 60]
+        self.hsv_yellow_upper = [55, 255, 255]
 
-        self.yellow_offset = 330
+        self.yellow_offset = 300
 
     def cbFindLane(self, image_msg):
         if self.counter % 3 != 0:

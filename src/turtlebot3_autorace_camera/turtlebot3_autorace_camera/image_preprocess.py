@@ -34,7 +34,7 @@ class ImagePreprocessor(Node):
 
         if self.use_preprocessing:
             # 대비 증가(alpha=1.5), 밝기 감소(beta=-50)
-            processed = cv2.convertScaleAbs(frame, alpha=0.8, beta=-50)
+            processed = cv2.convertScaleAbs(frame, alpha=0.7, beta=-80)
             self.get_logger().info('전처리 적용됨: 대비 증가 + 밝기 감소')
         else:
             processed = frame
