@@ -12,7 +12,7 @@ class ControlLane(Node):
 
         self.sub_lane = self.create_subscription(
             Float64,
-            '/control/lane',
+            '/lane_center',
             self.cb_follow_lane,
             10
         )

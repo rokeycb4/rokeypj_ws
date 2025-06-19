@@ -11,14 +11,14 @@ class LCTest(Node):
     def __init__(self):
         super().__init__('lc_test')
 
-        self.pub_cmd_vel = self.create_publisher(Twist, '/control/cmd_vel', 1)
+        self.pub_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 1)
         self.subscriber_created = False
         self.active = False
 
         self.center_value = 500.0  # 기본값 설정
 
         self.get_logger().info('Node started, waiting 5 seconds before subscribing...')
-        self.create_timer(5.0, self.start_subscriber)
+        self.create_timer(3.0, self.start_subscriber)
 
     def start_subscriber(self):
         if not self.subscriber_created:
@@ -42,14 +42,14 @@ class LCTest(Node):
 
     def drive_for_seconds(self):
         start_time = time.time()
-        duration = 4  # n초 동안 주행
+        duration = 29  # n초 동안 주행
 
         while time.time() - start_time < duration:
             error = self.center_value - 500
 
             twist = Twist()
-            twist.linear.x = 0.1
-            twist.angular.z = -0.005 * error
+            twist.linear.x = 0.05
+            twist.angular.z = 0.005 * error * 0.1
             self.pub_cmd_vel.publish(twist)
 
             time.sleep(0.1)  # 10Hz

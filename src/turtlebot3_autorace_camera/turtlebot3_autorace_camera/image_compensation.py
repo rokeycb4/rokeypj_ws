@@ -68,7 +68,8 @@ class ImageCompensation(Node):
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
                 CompressedImage,
-                '/camera/image_raw/compressed',
+                # '/camera/image_raw/compressed',
+                '/camera/preprocessed/compressed',
                 self.cbImageCompensation,
                 10
             )
@@ -196,8 +197,8 @@ class ImageCompensation(Node):
         else:
             # lower_white = np.array([44, 0, 249])
             # upper_white = np.array([120, 255, 255])
-            lower_white = np.array([0, 0, 240])
-            upper_white = np.array([179, 0, 255])
+            lower_white = np.array([0, 0, 180])
+            upper_white = np.array([95, 72, 255])
         white_mask = cv2.inRange(hsv_img, lower_white, upper_white)
 
         # 노란색 마스크: calibration mode이면 HSV trackbar 값을 사용, 아니면 기본값
