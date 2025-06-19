@@ -53,6 +53,8 @@ setup(
 
             'detect_stop_voice = turtlebot3_autorace_detect.detect_stop_voice:main',
 
+            'detect_lane_test = turtlebot3_autorace_detect.detect_lane_test:main', 
+
         ],
     },
 )

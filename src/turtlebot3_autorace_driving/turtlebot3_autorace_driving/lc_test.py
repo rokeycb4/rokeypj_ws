@@ -45,11 +45,20 @@ class LCTest(Node):
         duration = 29  # n초 동안 주행
 
         while time.time() - start_time < duration:
-            error = self.center_value - 500
+            error = self.center_value - 640
+            self.get_logger().info(f'{error} - origin error.')
+            # if error < 0:
+            #     error = 0
+            #     self.get_logger().info(f'{error} - refixxed error.')
+
+            # elif error > 800:
+            #     error = 620
+            #     self.get_logger().info(f'{error} - refixxed error.')
+
 
             twist = Twist()
-            twist.linear.x = 0.05
-            twist.angular.z = 0.005 * error * 0.1
+            twist.linear.x = 0.08
+            twist.angular.z = 0.002 * error 
             self.pub_cmd_vel.publish(twist)
 
             time.sleep(0.1)  # 10Hz
