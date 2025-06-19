@@ -153,115 +153,114 @@ class DetectLane(Node):
         self.pub_bev_yellow.publish(bev_yellow_msg)
         self.pub_bev_roi.publish(roi_msg)
         ##############################
-        # white_lane: left, yellow_lane: right
+
         # 3. 차선 픽셀 검출 및 2차 다항식으로 피팅
         if self.left_fit is None or self.right_fit is None:
             # 첫 프레임이거나 차선을 놓쳤을 경우, Sliding Window로 처음부터 찾기
-            left_fitx, self.left_fit = self.sliding_window(warped_white_mask, 'left')  # white lane is left
-            right_fitx, self.right_fit = self.sliding_window(warped_yellow_mask, 'right')  # yellow lane is right
+            left_fitx, self.left_fit = self.sliding_window(warped_yellow_mask, 'left')
+            right_fitx, self.right_fit = self.sliding_window(warped_white_mask, 'right')
         else:
             # 이전 프레임의 차선 위치 주변에서 빠르게 다시 찾기
-            left_fitx, self.left_fit = self.fit_from_lines(self.left_fit, warped_white_mask)  # white lane is left
-            right_fitx, self.right_fit = self.fit_from_lines(self.right_fit, warped_yellow_mask)  # yellow lane is right
+            left_fitx, self.left_fit = self.fit_from_lines(self.left_fit, warped_yellow_mask)
+            right_fitx, self.right_fit = self.fit_from_lines(self.right_fit, warped_white_mask)
 
         # =================================================================
         # =================================================================
-        # [수정된 부분] 안전장치를 추가합니다.
-        # 차선 감지에 하나라도 실패했다면(None이 반환되었다면), 더 이상 진행하지 않고 현재 프레임 처리를 중단합니다.
-        if self.left_fit is None or self.right_fit is None:
-            self.get_logger().warn('Lane detection failed, skipping frame.')
+        # [수정된 부분] 여기서 안전장치를 추가합니다.
+        # # 차선 감지에 하나라도 실패했다면(None이 반환되었다면), 더 이상 진행하지 않고 현재 프레임 처리를 중단합니다.
+        # if self.left_fit is None or self.right_fit is None:
+        #     self.get_logger().warn('Lane detection failed, skipping frame.')
             
-            # 차선을 못 찾았을 경우, 보정된 원본 이미지만이라도 발행하여 상태를 확인할 수 있습니다.
-            # (이 줄의 주석을 해제하면 됩니다.)
-            self.pub_image_lane.publish(msg_compensated)
-            return
+        #     # 차선을 못 찾았을 경우, 보정된 원본 이미지만이라도 발행하여 상태를 확인할 수 있습니다.
+        #     # (이 줄의 주석을 해제하면 됩니다.)
+        #     self.pub_image_lane.publish(msg_compensated)
+        #     return
         # =================================================================
 
         # 4. 결과 그리기 및 최종 정보 발행 (안전장치를 통과한 경우에만 실행됨)
-        self.draw_lane_and_publish(img_compensated, warped_white_mask, warped_yellow_mask, left_fitx, right_fitx)
-
+        self.draw_lane_and_publish(img_compensated, warped_yellow_mask, warped_white_mask, left_fitx, right_fitx)
 
     def sliding_window(self, img_w, left_or_right):
-            """Sliding Window 알고리즘으로 차선을 처음부터 찾습니다."""
-            histogram = np.sum(img_w[int(img_w.shape[0] / 2):, :], axis=0)
-            midpoint = int(histogram.shape[0] / 2)
-            
-            if left_or_right == 'left':
-                lane_base = np.argmax(histogram[:midpoint])
-            else: # 'right'
-                lane_base = np.argmax(histogram[midpoint:]) + midpoint
+        """Sliding Window 알고리즘으로 차선을 처음부터 찾습니다."""
+        histogram = np.sum(img_w[int(img_w.shape[0] / 2):, :], axis=0)
+        midpoint = int(histogram.shape[0] / 2)
+        
+        if left_or_right == 'left':
+            lane_base = np.argmax(histogram[:midpoint])
+        else: # 'right'
+            lane_base = np.argmax(histogram[midpoint:]) + midpoint
 
-            nwindows, margin, minpix = 20, 50, 50
-            window_height = int(img_w.shape[0] / nwindows)
-            nonzero = img_w.nonzero()
-            nonzeroy, nonzerox = np.array(nonzero[0]), np.array(nonzero[1])
-            x_current = lane_base
-            lane_inds = []
+        nwindows, margin, minpix = 20, 50, 50
+        window_height = int(img_w.shape[0] / nwindows)
+        nonzero = img_w.nonzero()
+        nonzeroy, nonzerox = np.array(nonzero[0]), np.array(nonzero[1])
+        x_current = lane_base
+        lane_inds = []
 
-            for window in range(nwindows):
-                win_y_low = img_w.shape[0] - (window + 1) * window_height
-                win_y_high = img_w.shape[0] - window * window_height
-                win_x_low = x_current - margin
-                win_x_high = x_current + margin
-                
-                good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
-                            (nonzerox >= win_x_low) & (nonzerox < win_x_high)).nonzero()[0]
-                lane_inds.append(good_inds)
-                
-                if len(good_inds) > minpix:
-                    x_current = int(np.mean(nonzerox[good_inds]))
-                    
-            lane_inds = np.concatenate(lane_inds)
-            x, y = nonzerox[lane_inds], nonzeroy[lane_inds]
+        for window in range(nwindows):
+            win_y_low = img_w.shape[0] - (window + 1) * window_height
+            win_y_high = img_w.shape[0] - window * window_height
+            win_x_low = x_current - margin
+            win_x_high = x_current + margin
             
-            # [디버깅 로그 추가] 슬라이딩 윈도우를 통해 최종적으로 몇 개의 픽셀이 선택되었는지 출력합니다.
-            self.get_logger().info(f"[{left_or_right.upper()}] Pixels selected by sliding window: {len(x)}")
+            good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
+                        (nonzerox >= win_x_low) & (nonzerox < win_x_high)).nonzero()[0]
+            lane_inds.append(good_inds)
             
-            # 픽셀이 충분히 감지되었는지 확인
-            if len(x) < minpix * 3:  # 안정적인 피팅을 위해 최소 픽셀 수 조건 강화
-                # 픽셀이 부족하면 이전 프레임의 값을 사용하거나, 이전 값도 없으면 None 반환
+            if len(good_inds) > minpix:
+                x_current = int(np.mean(nonzerox[good_inds]))
+                
+        lane_inds = np.concatenate(lane_inds)
+        x, y = nonzerox[lane_inds], nonzeroy[lane_inds]
+    
+     # [디버깅 로그 추가] 슬라이딩 윈도우를 통해 최종적으로 몇 개의 픽셀이 선택되었는지 출력합니다.
+        self.get_logger().info(f"[{left_or_right.upper()}] Pixels selected by sliding window: {len(x)}")
+    
+        # [수정된 부분 시작]
+        # 픽셀이 충분히 감지되었는지 확인
+        if len(x) < minpix * 3: # 안정적인 피팅을 위해 최소 픽셀 수 조건 강화
+            # 픽셀이 부족하면 이전 프레임의 값을 사용하거나, 이전 값도 없으면 None 반환
+            previous_fit = self.left_fit if left_or_right == 'left' else self.right_fit
+            if previous_fit is None:
+                return None, None # fitted_x와 lane_fit 모두 None으로 반환
+            else:
+                lane_fit = previous_fit
+        else:
+            try:
+                lane_fit = np.polyfit(y, x, 2)
+            except TypeError:
+                # polyfit이 실패할 경우에도 대비
                 previous_fit = self.left_fit if left_or_right == 'left' else self.right_fit
                 if previous_fit is None:
-                    return None, None  # fitted_x와 lane_fit 모두 None으로 반환
-                else:
-                    lane_fit = previous_fit
-            else:
-                try:
-                    lane_fit = np.polyfit(y, x, 2)
-                except TypeError:
-                    # polyfit이 실패할 경우에도 대비
-                    previous_fit = self.left_fit if left_or_right == 'left' else self.right_fit
-                    if previous_fit is None:
-                        return None, None
-                    lane_fit = previous_fit
-            
-            ploty = np.linspace(0, img_w.shape[0] - 1, img_w.shape[0])
-            fitted_x = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
-            
-            return fitted_x, lane_fit
-
+                    return None, None
+                lane_fit = previous_fit
+        # [수정된 부분 끝]
+                
+        ploty = np.linspace(0, img_w.shape[0] - 1, img_w.shape[0])
+        fitted_x = lane_fit[0] * ploty ** 2 + lane_fit[1] * ploty + lane_fit[2]
+        
+        return fitted_x, lane_fit
 
     def fit_from_lines(self, lane_fit, image):
-            """이전 차선 위치 주변에서 새로운 차선을 찾습니다."""
-            nonzero = image.nonzero()
-            nonzeroy, nonzerox = np.array(nonzero[0]), np.array(nonzero[1])
-            margin = 100
-            
-            lane_inds = ((nonzerox > (lane_fit[0] * (nonzeroy ** 2) + lane_fit[1] * nonzeroy + lane_fit[2] - margin)) &
-                        (nonzerox < (lane_fit[0] * (nonzeroy ** 2) + lane_fit[1] * nonzeroy + lane_fit[2] + margin)))
-            
-            x, y = nonzerox[lane_inds], nonzeroy[lane_inds]
+        """이전 차선 위치 주변에서 새로운 차선을 찾습니다."""
+        nonzero = image.nonzero()
+        nonzeroy, nonzerox = np.array(nonzero[0]), np.array(nonzero[1])
+        margin = 100
+        
+        lane_inds = ((nonzerox > (lane_fit[0] * (nonzeroy ** 2) + lane_fit[1] * nonzeroy + lane_fit[2] - margin)) &
+                     (nonzerox < (lane_fit[0] * (nonzeroy ** 2) + lane_fit[1] * nonzeroy + lane_fit[2] + margin)))
+        
+        x, y = nonzerox[lane_inds], nonzeroy[lane_inds]
 
-            try:
-                new_fit = np.polyfit(y, x, 2)
-            except TypeError:
-                new_fit = lane_fit
+        try:
+            new_fit = np.polyfit(y, x, 2)
+        except TypeError:
+            new_fit = lane_fit
 
-            ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
-            fitted_x = new_fit[0] * ploty ** 2 + new_fit[1] * ploty + new_fit[2]
-            
-            return fitted_x, new_fit
-
+        ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
+        fitted_x = new_fit[0] * ploty ** 2 + new_fit[1] * ploty + new_fit[2]
+        
+        return fitted_x, new_fit
 
     def draw_lane_and_publish(self, base_image, yellow_mask, white_mask, left_fitx, right_fitx):
             """
@@ -279,12 +278,12 @@ class DetectLane(Node):
             # 이 단계에서는 아직 그림을 그리지 않고, 필요한 값만 계산합니다.
             
             # 차선 검출 여부 확인
-            yellow_detected = np.count_nonzero(yellow_mask) > 30000
-            white_detected = np.count_nonzero(white_mask) > 30000
+            yellow_detected = np.count_nonzero(yellow_mask) > 5000
+            white_detected = np.count_nonzero(white_mask) > 5000
 
             centerx = None  # 중앙선 좌표 배열, 계산 실패 시 None 유지
 
-            # [개선] 중앙선 계산 로직을 명확하게 정리   
+            # [개선] 중앙선 계산 로직을 명확하게 정리
             # 이상적인 경우: 양쪽 차선 모두 감지
             if left_fitx is not None and right_fitx is not None:
                 self.get_logger().info("Calculating center from BOTH lanes.")
@@ -308,16 +307,16 @@ class DetectLane(Node):
             # 이 단계에서는 계산된 값을 바탕으로 그림만 그립니다.
             # [핵심 수정] 모든 그리기 작업 전에 None 여부를 반드시 확인합니다.
 
-            # 가. 왼쪽(하얀색) 차선 그리기
+            # 가. 왼쪽(노란색) 차선 그리기
             if left_fitx is not None:
                 # ploty 배열도 left_fitx 길이에 맞춰 잘라줍니다.
                 pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty[:len(left_fitx)]]))])
-                cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 255), thickness=25)  # white lane is left
+                cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 0), thickness=25)
 
-            # 나. 오른쪽(노란색) 차선 그리기
+            # 나. 오른쪽(흰색) 차선 그리기
             if right_fitx is not None:
                 pts_right = np.array([np.transpose(np.vstack([right_fitx, ploty[:len(right_fitx)]]))])
-                cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(0, 255, 255), thickness=25)  # yellow lane is right
+                cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(0, 0, 255), thickness=25)
 
             # 다. 중앙 주행 가능 영역 채우기 (양쪽 차선이 모두 있을 때만)
             if left_fitx is not None and right_fitx is not None:
@@ -326,21 +325,25 @@ class DetectLane(Node):
                 pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx[:min_len], ploty[:min_len]])))])
                 pts = np.hstack((pts_left, pts_right))
                 cv2.fillPoly(color_warp, np.int32([pts]), (0, 255, 0))
-
+                
             # 라. 중앙선(추정선 포함) 그리기
             if centerx is not None:
                 pts_center = np.array([np.transpose(np.vstack([centerx, ploty[:len(centerx)]]))])
                 cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
             
+            # self.get_logger().info("Step C: Drawing on BEV image complete.")
+
 
             # 4. 최종 이미지 생성 및 정보 발행
             # 원근 복원 및 합성
             unwarped_lane = cv2.warpPerspective(color_warp, self.Minv, (base_image.shape[1], base_image.shape[0]))
             final_image = cv2.addWeighted(base_image, 1, unwarped_lane, 0.5, 0)
+            # self.get_logger().info("Step D: Un-warping and composition complete.")
 
             # 최종 이미지 퍼블리시
             final_image_msg = self.cvBridge.cv2_to_compressed_imgmsg(final_image, 'png')
             self.pub_image_lane.publish(final_image_msg)
+            # self.get_logger().info("Step E: Published final detected image.")
 
             # 차선 상태(lane_state) 퍼블리시
             lane_state = 0
@@ -350,12 +353,19 @@ class DetectLane(Node):
             
             lane_state_msg = UInt8(data=lane_state)
             self.pub_lane_state.publish(lane_state_msg)
+            # self.get_logger().info(f"Step F: Published lane state: {lane_state}")
 
             # 중앙 위치 퍼블리시 (centerx가 성공적으로 계산되었을 경우에만)
             if centerx is not None:
                 if len(centerx) > 400:  # 로봇 앞 일정 거리의 차선 중앙값
                     desired_center = centerx[400]
                     self.pub_lane_center.publish(Float64(data=desired_center))
+                    # self.get_logger().info("Step G: Published lane center.")
+                else:
+                    self.get_logger().warn(f"centerx length ({len(centerx)}) is too short, skipping publish.")
+            
+            # self.get_logger().info("--- Leaving draw_lane_and_publish ---")
+
 def main(args=None):
     rclpy.init(args=args)
     node = DetectLane()

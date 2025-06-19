@@ -197,8 +197,8 @@ class ImageCompensation(Node):
         else:
             # lower_white = np.array([44, 0, 249])
             # upper_white = np.array([120, 255, 255])
-            lower_white = np.array([0, 0, 180])
-            upper_white = np.array([95, 72, 255])
+            lower_white = np.array([0, 0, 247])
+            upper_white = np.array([9, 11, 255])
         white_mask = cv2.inRange(hsv_img, lower_white, upper_white)
 
         # 노란색 마스크: calibration mode이면 HSV trackbar 값을 사용, 아니면 기본값
@@ -216,8 +216,8 @@ class ImageCompensation(Node):
         else:
             # lower_yellow = np.array([15, 0, 89])
             # upper_yellow = np.array([47, 101, 255])
-            lower_yellow = np.array([12, 29, 209])
-            upper_yellow = np.array([44, 255, 255])
+            lower_yellow = np.array([2, 0, 32])
+            upper_yellow = np.array([52, 255, 255])
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
         if self.is_calibration_mode:

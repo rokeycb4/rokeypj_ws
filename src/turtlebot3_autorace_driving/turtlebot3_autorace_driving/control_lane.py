@@ -57,7 +57,7 @@ class ControlLane(Node):
             return
 
         center = desired_center.data
-        error = center - 640
+        error = center - 600
 
         Kp = 0.0025
         Kd = 0.007
@@ -67,7 +67,7 @@ class ControlLane(Node):
 
         twist = Twist()
         # Linear velocity: adjust speed based on error (maximum 0.05 limit)
-        twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 500, 0) ** 2.2), 0.05)
+        twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 600, 0) ** 2.2), 0.05)
         twist.angular.z = -max(angular_z, -2.0) if angular_z < 0 else -min(angular_z, 2.0)
         self.pub_cmd_vel.publish(twist)
 
