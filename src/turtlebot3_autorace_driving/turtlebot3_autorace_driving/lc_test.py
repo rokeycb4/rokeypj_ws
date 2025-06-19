@@ -24,11 +24,11 @@ class LCTest(Node):
         if not self.subscriber_created:
             self.sub_lane = self.create_subscription(
                 Float64,
-                '/detect/lane',
+                '/lane_center',
                 self.callback_follow_lane,
                 1
             )
-            self.get_logger().info('Subscribed to /detect/lane')
+            self.get_logger().info('Subscribed to /lane_center')
             self.subscriber_created = True
 
     def callback_follow_lane(self, msg):
