@@ -263,115 +263,108 @@ class DetectLane(Node):
         return fitted_x, new_fit
 
     def draw_lane_and_publish(self, base_image, yellow_mask, white_mask, left_fitx, right_fitx):
-        """결과를 시각화하고 최종 정보를 발행합니다."""
-        self.get_logger().info("--- Entering draw_lane_and_publish ---")
+            """
+            [수정됨] 결과를 시각화하고 최종 정보를 안정적으로 발행합니다.
+            계산, 시각화, 발행의 각 단계를 명확히 분리하고 None 체크를 강화했습니다.
+            """
+            # self.get_logger().info("--- Entering draw_lane_and_publish ---")
 
-        ploty = np.linspace(0, base_image.shape[0] - 1, base_image.shape[0])
+            # 1. 초기 설정 및 변수 준비
+            ploty = np.linspace(0, base_image.shape[0] - 1, base_image.shape[0])
+            warp_zero = np.zeros_like(yellow_mask).astype(np.uint8)
+            color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
-        warp_zero = np.zeros_like(yellow_mask).astype(np.uint8)
-        color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
-        self.get_logger().info("Step A: Blank warp image created.")
+            # 2. 차선 상태 및 중앙선(centerx) 계산
+            # 이 단계에서는 아직 그림을 그리지 않고, 필요한 값만 계산합니다.
+            
+            # 차선 검출 여부 확인
+            yellow_detected = np.count_nonzero(yellow_mask) > 3000
+            white_detected = np.count_nonzero(white_mask) > 3000
 
-        yellow_detected = np.count_nonzero(yellow_mask) > 3000
-        white_detected = np.count_nonzero(white_mask) > 3000
+            centerx = None  # 중앙선 좌표 배열, 계산 실패 시 None 유지
 
-        lane_state = 0
-        if yellow_detected and white_detected:
-            lane_state = 2
-        elif yellow_detected:
-            lane_state = 1
-        elif white_detected:
-            lane_state = 3
-        self.get_logger().info(f"Step B: Lane state calculated: {lane_state}")
+            # [개선] 중앙선 계산 로직을 명확하게 정리
+            # 이상적인 경우: 양쪽 차선 모두 감지
+            if left_fitx is not None and right_fitx is not None:
+                self.get_logger().info("Calculating center from BOTH lanes.")
+                # 두 배열의 길이가 다를 수 있으므로, 짧은 쪽에 맞춰서 안전하게 계산
+                min_len = min(len(left_fitx), len(right_fitx))
+                centerx = np.mean([left_fitx[:min_len], right_fitx[:min_len]], axis=0)
 
-        centerx = None
-        if (
-        lane_state    == 2
-        and left_fitx is not None
-        and right_fitx is not None
-        and ploty     is not None
-        ):
-
-            # safe to compute min_len
-            min_len = min(len(left_fitx), len(right_fitx), len(ploty))
-            left_fitx = left_fitx[:min_len]
-            right_fitx = right_fitx[:min_len]
-            ploty     = ploty[:min_len]
-
-            centerx = np.mean([left_fitx, right_fitx], axis=0)
-
-            pts_left  = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-            pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-            pts       = np.hstack((pts_left, pts_right))
-            cv2.fillPoly(color_warp, np.int32([pts]), (0, 255, 0))
-
-        # fallback to single-line state if we only detected one side
-        elif lane_state == 2:
-            # you saw state==2, but one side is missing → degrade to single line
-            if left_fitx is not None and ploty is not None:
-                centerx = left_fitx + base_image.shape[1]//2
-            elif right_fitx is not None and ploty is not None:
-                centerx = right_fitx - base_image.shape[1]//2
+            # 차선 한쪽만 감지된 경우: 감지된 차선에서 일정 거리(320px)를 오프셋하여 중앙선 추정
+            elif left_fitx is not None:
+                self.get_logger().info("Estimating center from LEFT lane only.")
+                centerx = left_fitx + 320
+            elif right_fitx is not None:
+                self.get_logger().info("Estimating center from RIGHT lane only.")
+                centerx = right_fitx - 320
             else:
-                # zero fallback, or just skip this frame
-                return
-        # if lane_state == 2:
-        #     # 두 배열의 길이가 다를 수 있으므로 에러 방지를 위해 최소 길이 기준으로 잘라서 평균 계산
-        #     min_len = min(len(left_fitx), len(right_fitx), len(ploty))
-        #     left_fitx = left_fitx[:min_len]
-        #     right_fitx = right_fitx[:min_len]
-        #     ploty = ploty[:min_len]
-
-        #     centerx = np.mean([left_fitx, right_fitx], axis=0)
-
-        #     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-        #     pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-        #     pts = np.hstack((pts_left, pts_right))
-        #     cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
-        elif lane_state == 1 and left_fitx is not None:
-            centerx = left_fitx + 320
-        elif lane_state == 3 and right_fitx is not None:
-            centerx = right_fitx - 320
-
-        # 차선 시각화 (yellow, white, center)
-        if yellow_detected:
-            pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-            cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 0), thickness=25)
-        if white_detected:
-            pts_right = np.array([np.transpose(np.vstack([right_fitx, ploty]))])
-            cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(0, 0, 255), thickness=25)
-        if centerx is not None:
-            pts_center = np.array([np.transpose(np.vstack([centerx, ploty]))])
-            cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
-        self.get_logger().info("Step C: Drawing on BEV image complete.")
-
-        # 원근 복원 및 합성
-        unwarped_lane = cv2.warpPerspective(color_warp, self.Minv, (base_image.shape[1], base_image.shape[0]))
-        final_image = cv2.addWeighted(base_image, 1, unwarped_lane, 0.5, 0)
-        self.get_logger().info("Step D: Un-warping and composition complete.")
-
-        # 최종 이미지 퍼블리시
-        final_image_msg = self.cvBridge.cv2_to_compressed_imgmsg(final_image, 'png')
-        self.pub_image_lane.publish(final_image_msg)
-        self.get_logger().info("Step E: Published final detected image.")
-
-        # 상태 퍼블리시
-        lane_state_msg = UInt8(data=lane_state)
-        self.pub_lane_state.publish(lane_state_msg)
-        self.get_logger().info("Step F: Published lane state.")
-
-        # 중심 위치 퍼블리시
-        if centerx is not None:
-            if len(centerx) > 400:  # 안전하게 인덱스 접근
-                desired_center = centerx[400]
-                self.pub_lane_center.publish(Float64(data=desired_center))
-                self.get_logger().info("Step G: Published lane center.")
-            else:
-                self.get_logger().warn("centerx 길이가 400보다 짧아 lane center 퍼블리시 생략됨.")
-
-        self.get_logger().info("--- Leaving draw_lane_and_publish ---")
+                # 양쪽 차선 모두 감지 실패. centerx는 그대로 None.
+                self.get_logger().warn("Cannot calculate center, both lanes are missing.")
 
 
+            # 3. 차선 시각화 (BEV 이미지에 그리기)
+            # 이 단계에서는 계산된 값을 바탕으로 그림만 그립니다.
+            # [핵심 수정] 모든 그리기 작업 전에 None 여부를 반드시 확인합니다.
+
+            # 가. 왼쪽(노란색) 차선 그리기
+            if left_fitx is not None:
+                # ploty 배열도 left_fitx 길이에 맞춰 잘라줍니다.
+                pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty[:len(left_fitx)]]))])
+                cv2.polylines(color_warp, np.int32([pts_left]), isClosed=False, color=(255, 255, 0), thickness=25)
+
+            # 나. 오른쪽(흰색) 차선 그리기
+            if right_fitx is not None:
+                pts_right = np.array([np.transpose(np.vstack([right_fitx, ploty[:len(right_fitx)]]))])
+                cv2.polylines(color_warp, np.int32([pts_right]), isClosed=False, color=(0, 0, 255), thickness=25)
+
+            # 다. 중앙 주행 가능 영역 채우기 (양쪽 차선이 모두 있을 때만)
+            if left_fitx is not None and right_fitx is not None:
+                min_len = min(len(left_fitx), len(right_fitx))
+                pts_left = np.array([np.transpose(np.vstack([left_fitx[:min_len], ploty[:min_len]]))])
+                pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx[:min_len], ploty[:min_len]])))])
+                pts = np.hstack((pts_left, pts_right))
+                cv2.fillPoly(color_warp, np.int32([pts]), (0, 255, 0))
+                
+            # 라. 중앙선(추정선 포함) 그리기
+            if centerx is not None:
+                pts_center = np.array([np.transpose(np.vstack([centerx, ploty[:len(centerx)]]))])
+                cv2.polylines(color_warp, np.int32([pts_center]), isClosed=False, color=(0, 255, 255), thickness=12)
+            
+            # self.get_logger().info("Step C: Drawing on BEV image complete.")
+
+
+            # 4. 최종 이미지 생성 및 정보 발행
+            # 원근 복원 및 합성
+            unwarped_lane = cv2.warpPerspective(color_warp, self.Minv, (base_image.shape[1], base_image.shape[0]))
+            final_image = cv2.addWeighted(base_image, 1, unwarped_lane, 0.5, 0)
+            # self.get_logger().info("Step D: Un-warping and composition complete.")
+
+            # 최종 이미지 퍼블리시
+            final_image_msg = self.cvBridge.cv2_to_compressed_imgmsg(final_image, 'png')
+            self.pub_image_lane.publish(final_image_msg)
+            # self.get_logger().info("Step E: Published final detected image.")
+
+            # 차선 상태(lane_state) 퍼블리시
+            lane_state = 0
+            if yellow_detected and white_detected: lane_state = 2
+            elif yellow_detected: lane_state = 1
+            elif white_detected: lane_state = 3
+            
+            lane_state_msg = UInt8(data=lane_state)
+            self.pub_lane_state.publish(lane_state_msg)
+            # self.get_logger().info(f"Step F: Published lane state: {lane_state}")
+
+            # 중앙 위치 퍼블리시 (centerx가 성공적으로 계산되었을 경우에만)
+            if centerx is not None:
+                if len(centerx) > 400:  # 로봇 앞 일정 거리의 차선 중앙값
+                    desired_center = centerx[400]
+                    self.pub_lane_center.publish(Float64(data=desired_center))
+                    # self.get_logger().info("Step G: Published lane center.")
+                else:
+                    self.get_logger().warn(f"centerx length ({len(centerx)}) is too short, skipping publish.")
+            
+            # self.get_logger().info("--- Leaving draw_lane_and_publish ---")
 
 def main(args=None):
     rclpy.init(args=args)

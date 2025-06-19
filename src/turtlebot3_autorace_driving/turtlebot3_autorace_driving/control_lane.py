@@ -15,7 +15,7 @@ class ControlLane(Node):
 
         self.sub_lane = self.create_subscription(
             Float64,
-            '/detect/lane',
+            '/lane_center',
             self.callback_follow_lane,
             1
         )
@@ -49,6 +49,10 @@ class ControlLane(Node):
         self.MAX_VEL = max_vel_msg.data
 
     def callback_follow_lane(self, desired_center):
+
+        self.get_logger().info(f'/lane_center: {desired_center.data}')
+
+
         if self.state != self.STATE_RUN:
             return
 

@@ -33,6 +33,7 @@ class LCTest(Node):
 
     def callback_follow_lane(self, msg):
         self.center_value = msg.data  # 계속 갱신됨
+        # self.get_logger().info(f'{msg.data}')
 
         if not self.active:
             self.get_logger().info('Received first /detect/lane, starting 2 second movement...')
@@ -41,7 +42,7 @@ class LCTest(Node):
 
     def drive_for_seconds(self):
         start_time = time.time()
-        duration = 2  # n초 동안 주행
+        duration = 4  # n초 동안 주행
 
         while time.time() - start_time < duration:
             error = self.center_value - 500
