@@ -100,7 +100,7 @@ class DetectLane(Node):
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
                 #CompressedImage, '/detect/image_input/compressed', self.cbFindLane, 1
-                CompressedImage, '/image_raw/compressed', self.cbFindLane, 1                
+                CompressedImage, '/camera/image_raw/compressed', self.cbFindLane, 1                
                 )
         elif self.sub_image_type == 'raw':
             self.sub_image_original = self.create_subscription(
@@ -298,6 +298,8 @@ class DetectLane(Node):
         x = points[:, [0, 2]].flatten()
         y = points[:, [1, 3]].flatten()
         
+        print("Shape of points:", points.shape)
+
         try:
             coefficients = np.polyfit(y, x, deg=1)
             line_fit = np.poly1d(coefficients)
