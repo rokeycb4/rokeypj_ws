@@ -10,7 +10,7 @@ class ImagePublisher(Node):
         super().__init__('image_publisher')
 
         # 이미지 퍼블리셔 생성
-        self.publisher_ = self.create_publisher(CompressedImage, 'image_raw/compressed', 10)
+        self.publisher_ = self.create_publisher(CompressedImage, '/camera/image_raw/compressed', 10)
         # 주기적인 이미지 전송을 위한 타이머 설정 (0.2초 주기)
         self.timer = self.create_timer(0.2, self.publish_image)
 
