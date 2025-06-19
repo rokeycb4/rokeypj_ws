@@ -66,8 +66,6 @@ class ControlLane(Node):
         self.last_error = error
 
 
-        time.sleep(0.1)
-
         twist = Twist()
         # Linear velocity: adjust speed based on error (maximum 0.05 limit)
         twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 640, 0) ** 2.2), 0.02)
