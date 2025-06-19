@@ -48,9 +48,9 @@ class DetectLane(Node):
         self.mov_avg_left = np.empty((0, 3))
 
         self.yellow_offset = 300
-        
-        self.hsv_yellow_lower = [15, 80, 120]
-        self.hsv_yellow_upper = [40, 255, 255]
+
+        self.hsv_yellow_lower = [15, 50, 120]
+        self.hsv_yellow_upper = [45, 255, 255]
 
 
         # 정확한 원근 변환 행렬 (detect_lane.py 기준)
