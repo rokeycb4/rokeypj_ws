@@ -55,9 +55,6 @@ class ImagePreprocessor(Node):
             lab = cv2.merge((l2, a, b))
             processed = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-            # 대비/밝기 조절
-            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-30)
-
             # 감마 보정으로 빛반사 억제
             processed = self.adjust_gamma(processed, gamma=1.6)
 

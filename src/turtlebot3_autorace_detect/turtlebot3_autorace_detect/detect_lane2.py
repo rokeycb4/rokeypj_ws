@@ -45,10 +45,10 @@ class DetectLane(Node):
         self.reliability_yellow_line = 100
         self.mov_avg_left = np.empty((0, 3))
 
-        self.yellow_offset = 300
+        self.yellow_offset = 550
 
         # 노란색 HSV 범위 (확장)
-        self.hsv_yellow_lower = [8, 20, 100]
+        self.hsv_yellow_lower = [4, 15, 100]
         self.hsv_yellow_upper = [65, 255, 255]
 
         # 흰색 HSV 범위 (정의만, 사용 안 함)
@@ -56,8 +56,8 @@ class DetectLane(Node):
         self.hsv_white_upper = [180, 45, 255]
 
         src = np.float32([
-            [180, 400],
-            [70, 720],
+            [0, 300],
+            [0, 720],           # left down
             [1230, 720],
             [1140, 400]
         ])
@@ -220,7 +220,7 @@ class DetectLane(Node):
         self.pub_lane_state.publish(lane_state)
 
         if self.is_center_x_exist:
-            cx_val = float(centerx.item(350))
+            cx_val = float(centerx.item(550))
             self.get_logger().info(f'[LINE DETECTED] Center X at Y=350: {cx_val:.2f}, Lane State: {lane_state.data}')
             msg = Float64()
             msg.data = cx_val
@@ -241,7 +241,7 @@ class DetectLane(Node):
                     if 0 <= y < image.shape[0] and 0 <= cx < image.shape[1]:
                         cv2.circle(color_image, (cx, y), 2, (0, 0, 255), -1)
 
-                y_text = 350
+                y_text = 550
                 x_left = int(self.left_fitx[y_text])
                 x_center = int(centerx_int[y_text])
                 cv2.putText(color_image, 'left', (x_left - 30, y_text - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)

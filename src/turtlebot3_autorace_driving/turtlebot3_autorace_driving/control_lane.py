@@ -2,7 +2,7 @@ from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64, Bool
-
+import time
 
 class ControlLane(Node):
 
@@ -57,7 +57,7 @@ class ControlLane(Node):
             return
 
         center = desired_center.data
-        error = center - 600
+        error = (center - 640) * 0.5
 
         Kp = 0.0025
         Kd = 0.007
@@ -65,11 +65,17 @@ class ControlLane(Node):
         angular_z = Kp * error + Kd * (error - self.last_error)
         self.last_error = error
 
+
+        time.sleep(0.1)
+
         twist = Twist()
         # Linear velocity: adjust speed based on error (maximum 0.05 limit)
-        twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 600, 0) ** 2.2), 0.05)
-        twist.angular.z = -max(angular_z, -2.0) if angular_z < 0 else -min(angular_z, 2.0)
+        twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 640, 0) ** 2.2), 0.02)
+        twist.angular.z = -max(angular_z, -0.3) if angular_z < 0 else -min(angular_z, 0.3)
         self.pub_cmd_vel.publish(twist)
+
+
+
 
     def callback_stopline(self, msg):
         if msg.data and self.state != self.STATE_STOP:
