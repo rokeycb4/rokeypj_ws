@@ -21,6 +21,8 @@ setup(
         ('share/' + package_name + '/param/traffic_light', glob('param/traffic_light/*.yaml')),
         ('share/' + package_name + '/image', glob('image/*.png')),
         ('share/' + package_name + '/model', glob('turtlebot3_autorace_detect/model/*.pth')),  # 모델 weight 포함
+        
+        ('share/' + package_name + '/resource', glob('resource/*.tflite')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -48,6 +50,8 @@ setup(
 
             'detect_lane3 = turtlebot3_autorace_detect.detect_lane3:main',
             'detect_stop_line = turtlebot3_autorace_detect.detect_stop_line:main',
+
+            'detect_stop_voice = turtlebot3_autorace_detect.detect_stop_voice:main',
 
         ],
     },
