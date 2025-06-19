@@ -61,10 +61,10 @@ class DetectLane(Node):
         img_size = (1280, 720)
         # 원본 이미지의 차선 영역 4개 꼭짓점 (Source points)
         src = np.float32([
-        (61, 0),  # 왼쪽 위
-        (0, 720),  # 왼쪽 아래
-        (1280, 720),  # 오른쪽 아래        
-        (1114, 0)  # 오른쪽 위
+        (180, 400),
+        (70, 720),
+        (1230, 720),
+        (1140, 400)
         ])
         # src = np.float32([
         # (460, 360),  # 왼쪽 위
@@ -116,10 +116,10 @@ class DetectLane(Node):
         # 빨간 테두리 그리기 (원본 이미지 복사본에)
         img_roi = img_compensated.copy()
         pts = np.array([
-        [61, 0],  # 왼쪽 위
-        [0, 720],  # 왼쪽 아래
-        [1280, 720],  # 오른쪽 아래     
-        [1114, 0]   # 오른쪽 위
+        [180, 400],  # 왼쪽 위
+        [70, 720],  # 왼쪽 아래
+        [1230, 720],  # 오른쪽 아래     
+        [1140, 400]   # 오른쪽 위
         ], np.int32)
         # pts = np.array([
         # [460, 360],  # 왼쪽 위
@@ -294,10 +294,10 @@ class DetectLane(Node):
             # 차선 한쪽만 감지된 경우: 감지된 차선에서 일정 거리(320px)를 오프셋하여 중앙선 추정
             elif left_fitx is not None:
                 self.get_logger().info("Estimating center from LEFT lane only.")
-                centerx = left_fitx + 320
+                centerx = right_fitx - 320
             elif right_fitx is not None:
                 self.get_logger().info("Estimating center from RIGHT lane only.")
-                centerx = right_fitx - 320
+                centerx = left_fitx + 320
             else:
                 # 양쪽 차선 모두 감지 실패. centerx는 그대로 None.
                 self.get_logger().warn("Cannot calculate center, both lanes are missing.")

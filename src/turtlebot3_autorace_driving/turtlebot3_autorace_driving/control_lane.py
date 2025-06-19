@@ -21,7 +21,7 @@ class ControlLane(Node):
         )
         self.sub_max_vel = self.create_subscription(
             Float64,
-            '/control/max_vel',
+            '/max_vel',
             self.callback_get_max_vel,
             1
         )
@@ -34,7 +34,7 @@ class ControlLane(Node):
 
         self.pub_cmd_vel = self.create_publisher(
             Twist,
-            '/control/cmd_vel',
+            '/cmd_vel',
             1
         )
 
@@ -57,7 +57,7 @@ class ControlLane(Node):
             return
 
         center = desired_center.data
-        error = center - 500
+        error = center - 640
 
         Kp = 0.0025
         Kd = 0.007

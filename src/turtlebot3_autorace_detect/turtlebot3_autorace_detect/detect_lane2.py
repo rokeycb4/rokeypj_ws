@@ -17,10 +17,16 @@ class DetectLane(Node):
         self.sub_image_type = 'compressed'
         self.pub_image_type = 'compressed'
 
-        subscribe_topic = '/camera/image_raw/compressed'
+        # subscribe_topic = '/camera/image_raw/compressed'
+        # self.sub_image_original = self.create_subscription(
+        #     CompressedImage, subscribe_topic, self.cbFindLane, 1
+        # )
+
+        subscribe_topic = '/camera/preprocessed/compressed'
         self.sub_image_original = self.create_subscription(
             CompressedImage, subscribe_topic, self.cbFindLane, 1
         )
+
 
         self.pub_image_lane = self.create_publisher(
             CompressedImage, '/detect/image_output/compressed', 1
