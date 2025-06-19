@@ -10,7 +10,6 @@ class ImagePreprocessor(Node):
     def __init__(self):
         super().__init__('image_preprocessor')
 
-        # Declare parameter pp (preprocessing option)
         self.declare_parameter('pp', True)
         self.use_preprocessing = self.get_parameter('pp').get_parameter_value().bool_value
         self.get_logger().info(f'전처리 모드: {self.use_preprocessing}')
@@ -28,13 +27,27 @@ class ImagePreprocessor(Node):
             10
         )
 
+    def adjust_gamma(self, image, gamma=1.6):
+        inv_gamma = 1.0 / gamma
+        table = np.array([
+            ((i / 255.0) ** inv_gamma) * 255 for i in range(256)
+        ]).astype("uint8")
+        return cv2.LUT(image, table)
+
+    def reduce_v_channel(self, image, scale=0.8):
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
+        v = np.clip(v * scale, 0, 255).astype(np.uint8)
+        return cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
+
     def image_callback(self, msg):
         np_arr = np.frombuffer(msg.data, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if self.use_preprocessing:
-            self.get_logger().info('전처리 적용됨: 대비 증가 + 밝기 감소')
-            # CLAHE 적용
+            self.get_logger().info('전처리 적용됨: CLAHE + 대비감소 + 감마 + V채널 억제')
+
+            # CLAHE (명암 향상)
             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -42,10 +55,15 @@ class ImagePreprocessor(Node):
             lab = cv2.merge((l2, a, b))
             processed = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-            # 추가 밝기/대비 조절
-            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-50)
+            # 대비/밝기 조절
+            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-30)
 
-            self.get_logger().info('전처리 적용됨: CLAHE + 밝기 감소')
+            # 감마 보정으로 빛반사 억제
+            processed = self.adjust_gamma(processed, gamma=1.6)
+
+            # V 채널 줄이기 (고휘도 영역 약화)
+            processed = self.reduce_v_channel(processed, scale=0.85)
+
         else:
             processed = frame
             self.get_logger().info('전처리 미적용 (원본 그대로)')
