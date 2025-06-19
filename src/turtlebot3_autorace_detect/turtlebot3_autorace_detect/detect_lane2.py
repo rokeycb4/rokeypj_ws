@@ -14,8 +14,13 @@ class DetectLane(Node):
         self.sub_image_type = 'compressed'
         self.pub_image_type = 'compressed'
 
+        # self.sub_image_original = self.create_subscription(
+        #     CompressedImage, '/camera/preprocessed/compressed',
+        #     self.cbFindLane, 1
+        # )
+
         self.sub_image_original = self.create_subscription(
-            CompressedImage, '/camera/preprocessed/compressed',
+            CompressedImage, '/image_compensated/compressed',
             self.cbFindLane, 1
         )
 
@@ -32,6 +37,9 @@ class DetectLane(Node):
         self.pub_lane_state = self.create_publisher(
             UInt8, '/detect/lane_state', 1
         )
+        self.pub_bev_image = self.create_publisher(
+            CompressedImage, '/detect/bev_image/compressed', 1
+        )
 
         self.cvBridge = CvBridge()
         self.counter = 1
@@ -40,13 +48,25 @@ class DetectLane(Node):
         self.mov_avg_left = np.empty((0, 3))
 
         self.yellow_offset = 300
-        self.hsv_yellow_lower = [10, 50, 60]
-        self.hsv_yellow_upper = [55, 255, 255]
 
-        self.M = cv2.getPerspectiveTransform(
-            np.float32([[0, 720], [1280, 720], [750, 360], [530, 360]]),
-            np.float32([[320, 720], [960, 720], [960, 0], [320, 0]])
-        )
+        self.hsv_yellow_lower = [15, 50, 120]
+        self.hsv_yellow_upper = [45, 255, 255]
+
+
+        # 정확한 원근 변환 행렬 (detect_lane.py 기준)
+        src = np.float32([
+            [180, 400],  # 왼쪽 위
+            [70, 720],   # 왼쪽 아래
+            [1230, 720], # 오른쪽 아래
+            [1140, 400]  # 오른쪽 위
+        ])
+        dst = np.float32([
+            [0, 0],
+            [0, 720],
+            [1280, 720],
+            [1280, 0]
+        ])
+        self.M = cv2.getPerspectiveTransform(src, dst)
 
         self.left_fit = np.array([0.0, 0.0, 300.0])
         self.lane_fit_bef = np.array([0., 0., 0.])
@@ -61,6 +81,10 @@ class DetectLane(Node):
         raw_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         bev_image = cv2.warpPerspective(raw_image, self.M, (1280, 720))
+
+        # BEV 확인용 이미지 발행
+        bev_msg = self.cvBridge.cv2_to_compressed_imgmsg(bev_image, 'jpg')
+        self.pub_bev_image.publish(bev_msg)
 
         ploty = np.linspace(0, bev_image.shape[0] - 1, bev_image.shape[0])
         yellow_fraction, mask = self.maskYellowLane(bev_image)
@@ -94,24 +118,18 @@ class DetectLane(Node):
             self.pub_image_mask.publish(self.cvBridge.cv2_to_compressed_imgmsg(mask_bgr, 'jpg'))
 
     def maskYellowLane(self, image):
-        # BEV 이미지 크기
         height, width = image.shape[:2]
-
-        # 좌측 60% 영역만 사용 (ROI)
         roi = image[:, :int(width * 0.6)]
 
-        # 전처리
         roi = cv2.GaussianBlur(roi, (5, 5), 0)
         roi = cv2.convertScaleAbs(roi, alpha=1.2, beta=10)
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, np.array(self.hsv_yellow_lower), np.array(self.hsv_yellow_upper))
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 
-        # 원래 이미지 크기로 패딩 (오른쪽 40%는 0으로 채움)
         pad_width = width - mask.shape[1]
         mask = cv2.copyMakeBorder(mask, 0, 0, 0, pad_width, cv2.BORDER_CONSTANT, value=0)
 
-        # 신뢰도 계산
         fraction_num = np.count_nonzero(mask)
         row_nonzero = np.count_nonzero(mask, axis=1)
         self.reliability_yellow_line += 5 if np.count_nonzero(row_nonzero) > 500 else -5
@@ -122,7 +140,6 @@ class DetectLane(Node):
         self.pub_yellow_line_reliability.publish(msg)
 
         return fraction_num, mask
-
 
     def fit_from_lines(self, lane_fit, image):
         nonzeroy, nonzerox = image.nonzero()
@@ -189,14 +206,19 @@ class DetectLane(Node):
             centerx = self.left_fitx + self.yellow_offset
             self.is_center_x_exist = True
             lane_state.data = 1
+        else:
+            lane_state.data = 0
 
         self.pub_lane_state.publish(lane_state)
 
         if self.is_center_x_exist:
-            self.get_logger().info(f'Desired center X: {centerx.item(350)}')
+            cx_val = float(centerx.item(350))
+            self.get_logger().info(f'[LINE DETECTED] Center X at Y=350: {cx_val:.2f}, Lane State: {lane_state.data}')
             msg = Float64()
-            msg.data = float(centerx.item(350))
+            msg.data = cx_val
             self.pub_lane.publish(msg)
+        else:
+            self.get_logger().info(f'[NO LINE] Lane State: {lane_state.data}')
 
         if self.pub_image_type == 'compressed':
             color_image = image.copy()
