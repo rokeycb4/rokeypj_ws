@@ -14,13 +14,8 @@ class DetectLane(Node):
         self.sub_image_type = 'compressed'
         self.pub_image_type = 'compressed'
 
-        # self.sub_image_original = self.create_subscription(
-        #     CompressedImage, '/camera/preprocessed/compressed',
-        #     self.cbFindLane, 1
-        # )
-
         self.sub_image_original = self.create_subscription(
-            CompressedImage, '/image_compensated/compressed',
+            CompressedImage, '/camera/preprocessed/compressed',
             self.cbFindLane, 1
         )
 
@@ -40,6 +35,9 @@ class DetectLane(Node):
         self.pub_bev_image = self.create_publisher(
             CompressedImage, '/detect/bev_image/compressed', 1
         )
+        self.pub_trapezoid_region = self.create_publisher(
+            CompressedImage, '/detect/trapezoid_region/compressed', 1
+        )
 
         self.cvBridge = CvBridge()
         self.counter = 1
@@ -49,16 +47,19 @@ class DetectLane(Node):
 
         self.yellow_offset = 300
 
-        self.hsv_yellow_lower = [10, 40, 120]
-        self.hsv_yellow_upper = [55, 255, 255]
+        # 노란색 HSV 범위 (확장)
+        self.hsv_yellow_lower = [8, 20, 100]
+        self.hsv_yellow_upper = [65, 255, 255]
 
+        # 흰색 HSV 범위 (정의만, 사용 안 함)
+        self.hsv_white_lower = [0, 0, 200]
+        self.hsv_white_upper = [180, 45, 255]
 
-        # 정확한 원근 변환 행렬 (detect_lane.py 기준)
         src = np.float32([
-            [180, 400],  # 왼쪽 위
-            [70, 720],   # 왼쪽 아래
-            [1230, 720], # 오른쪽 아래
-            [1140, 400]  # 오른쪽 위
+            [180, 400],
+            [70, 720],
+            [1230, 720],
+            [1140, 400]
         ])
         dst = np.float32([
             [0, 0],
@@ -66,6 +67,7 @@ class DetectLane(Node):
             [1280, 720],
             [1280, 0]
         ])
+        self.Msrc = src
         self.M = cv2.getPerspectiveTransform(src, dst)
 
         self.left_fit = np.array([0.0, 0.0, 300.0])
@@ -79,10 +81,8 @@ class DetectLane(Node):
 
         np_arr = np.frombuffer(image_msg.data, np.uint8)
         raw_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
         bev_image = cv2.warpPerspective(raw_image, self.M, (1280, 720))
 
-        # BEV 확인용 이미지 발행
         bev_msg = self.cvBridge.cv2_to_compressed_imgmsg(bev_image, 'jpg')
         self.pub_bev_image.publish(bev_msg)
 
@@ -112,10 +112,17 @@ class DetectLane(Node):
 
         self.make_lane(bev_image, yellow_fraction)
 
-        # 노란색 마스크 이미지 발행
         mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
         if self.pub_image_type == 'compressed':
             self.pub_image_mask.publish(self.cvBridge.cv2_to_compressed_imgmsg(mask_bgr, 'jpg'))
+
+        # 원본 이미지 위에 사다리꼴 영역 시각화
+        visualized = raw_image.copy()
+        pts = np.array(self.Msrc, np.int32).reshape((-1, 1, 2))
+        cv2.polylines(visualized, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
+
+        trap_msg = self.cvBridge.cv2_to_compressed_imgmsg(visualized, 'jpg')
+        self.pub_trapezoid_region.publish(trap_msg)
 
     def maskYellowLane(self, image):
         height, width = image.shape[:2]
@@ -124,8 +131,9 @@ class DetectLane(Node):
         roi = cv2.GaussianBlur(roi, (5, 5), 0)
         roi = cv2.convertScaleAbs(roi, alpha=1.2, beta=10)
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, np.array(self.hsv_yellow_lower), np.array(self.hsv_yellow_upper))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+
+        yellow_mask = cv2.inRange(hsv, np.array(self.hsv_yellow_lower), np.array(self.hsv_yellow_upper))
+        mask = cv2.morphologyEx(yellow_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 
         pad_width = width - mask.shape[1]
         mask = cv2.copyMakeBorder(mask, 0, 0, 0, pad_width, cv2.BORDER_CONSTANT, value=0)
@@ -225,13 +233,13 @@ class DetectLane(Node):
 
             for y, lx in enumerate(self.left_fitx.astype(np.int32)):
                 if 0 <= y < image.shape[0] and 0 <= lx < image.shape[1]:
-                    cv2.circle(color_image, (lx, y), 2, (0, 255, 255), -1)  # Yellow
+                    cv2.circle(color_image, (lx, y), 2, (0, 255, 255), -1)
 
             if self.is_center_x_exist:
                 centerx_int = (self.left_fitx + self.yellow_offset).astype(np.int32)
                 for y, cx in enumerate(centerx_int):
                     if 0 <= y < image.shape[0] and 0 <= cx < image.shape[1]:
-                        cv2.circle(color_image, (cx, y), 2, (0, 0, 255), -1)  # Red
+                        cv2.circle(color_image, (cx, y), 2, (0, 0, 255), -1)
 
                 y_text = 350
                 x_left = int(self.left_fitx[y_text])
@@ -240,7 +248,6 @@ class DetectLane(Node):
                 cv2.putText(color_image, 'center', (x_center - 40, y_text + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             self.pub_image_lane.publish(self.cvBridge.cv2_to_compressed_imgmsg(color_image, 'jpg'))
-
 
 def main(args=None):
     rclpy.init(args=args)

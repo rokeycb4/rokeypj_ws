@@ -63,8 +63,8 @@ class ImagePreprocessor(Node):
 
             # V 채널 줄이기 (고휘도 영역 약화)
             processed = self.reduce_v_channel(processed, scale=0.85)
-            # 추가 밝기/대비 조절
-            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-80)
+            # # 추가 밝기/대비 조절
+            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-50)
 
         else:
             processed = frame
