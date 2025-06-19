@@ -49,8 +49,8 @@ class DetectLane(Node):
 
         self.yellow_offset = 300
 
-        self.hsv_yellow_lower = [15, 50, 120]
-        self.hsv_yellow_upper = [45, 255, 255]
+        self.hsv_yellow_lower = [10, 40, 120]
+        self.hsv_yellow_upper = [55, 255, 255]
 
 
         # 정확한 원근 변환 행렬 (detect_lane.py 기준)

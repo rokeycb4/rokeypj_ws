@@ -43,7 +43,7 @@ class ImagePreprocessor(Node):
             processed = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
             # 추가 밝기/대비 조절
-            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-50)
+            processed = cv2.convertScaleAbs(processed, alpha=0.9, beta=-80)
 
             self.get_logger().info('전처리 적용됨: CLAHE + 밝기 감소')
         else:
