@@ -68,7 +68,6 @@ class ImageCompensation(Node):
         if self.sub_image_type == 'compressed':
             self.sub_image_original = self.create_subscription(
                 CompressedImage,
-                # '/camera/image_raw/compressed',
                 '/camera/preprocessed/compressed',
                 self.cbImageCompensation,
                 10
@@ -130,6 +129,15 @@ class ImageCompensation(Node):
                 self.clip_hist_percent = param.value
         self.get_logger().info(f'change: {self.clip_hist_percent}')
         return SetParametersResult(successful=True)
+    
+    def keep_largest_contour(self, mask):
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return np.zeros_like(mask)
+        largest = max(contours, key=cv2.contourArea)
+        result = np.zeros_like(mask)
+        cv2.drawContours(result, [largest], -1, 255, thickness=cv2.FILLED)
+        return result
 
     def cbImageCompensation(self, msg_img):
         # 이미지 디코딩
@@ -197,8 +205,8 @@ class ImageCompensation(Node):
         else:
             # lower_white = np.array([44, 0, 249])
             # upper_white = np.array([120, 255, 255])
-            lower_white = np.array([0, 0, 247])
-            upper_white = np.array([9, 11, 255])
+            lower_white = np.array([0, 0, 200])
+            upper_white = np.array([179, 70, 255])
         white_mask = cv2.inRange(hsv_img, lower_white, upper_white)
 
         # 노란색 마스크: calibration mode이면 HSV trackbar 값을 사용, 아니면 기본값
@@ -219,6 +227,10 @@ class ImageCompensation(Node):
             lower_yellow = np.array([2, 0, 32])
             upper_yellow = np.array([52, 255, 255])
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
+
+        # ✅ 노이즈 제거: 가장 큰 덩어리만 남기기
+        white_mask = self.keep_largest_contour(white_mask)
+        yellow_mask = self.keep_largest_contour(yellow_mask)
 
         if self.is_calibration_mode:
             cv2.imshow("Yellow Mask Calibration", yellow_mask)
@@ -253,3 +265,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+

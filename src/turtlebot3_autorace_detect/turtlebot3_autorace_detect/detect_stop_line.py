@@ -28,7 +28,7 @@ class StopLineDetector(Node):
 
         # Grayscale 변환 + 이진화
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        _, binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
 
         # 전체 흰색 픽셀 수 계산
         white_pixel_count = cv2.countNonZero(binary)
@@ -47,7 +47,7 @@ class StopLineDetector(Node):
         enough_stripes = valid_contours >= 3
 
         # 조건 2: 흰색 픽셀 수가 충분한가
-        enough_white = white_pixel_count > 1000
+        enough_white = white_pixel_count > 20000
 
         # 두 조건 모두 만족해야 stop
         stopline_detected = enough_stripes and enough_white

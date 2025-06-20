@@ -1,409 +1,158 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import rclpy
 from rclpy.node import Node
-from aruco_msgs.msg import MarkerArray, Marker
-from geometry_msgs.msg import Twist
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-import getkey
-from std_msgs.msg import Header
-from sensor_msgs.msg import JointState
-
-from geometry_msgs.msg import Twist, Pose, PoseArray
+from rclpy.executors import MultiThreadedExecutor
+from aruco_msgs.msg import MarkerArray
 from turtlebot_cosmo_interface.srv import MoveitControl
-from aruco_yolo.moveit_client import TurtlebotArmClient
-import time
-import ast
+from geometry_msgs.msg import Pose
 
-
-# ANSI 색상 코드 정의
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
-BLUE = "\033[94m"
-MAGENTA = "\033[95m"
 CYAN = "\033[96m"
-RESET = "\033[0m"  # 색상 초기화
+RESET = "\033[0m"
 
-
-class ArucoMarkerListener(Node):
+class AutoPickPlaceNode(Node):
     def __init__(self):
-        super().__init__('aruco_marker_listener')
+        super().__init__('auto_pick_place_node')
 
-        # Change this to the desired marker ID from pick_n_place.launch.py file, Declare parameter with default integer value
-        self.markerid = self.declare_parameter('markerid', 0).get_parameter_value().integer_value
-
-        self.target_marker_id = self.markerid 
+        self.moveit_client = self.create_client(MoveitControl, 'moveit_control')
+        while not self.moveit_client.wait_for_service(timeout_sec=1.0):
+            self.log_info('MoveIt 서비스 대기 중...')
 
         self.subscription = self.create_subscription(
             MarkerArray,
             'detected_markers',
-            self.aruco_listener_callback,
+            self.marker_callback,
             10)
-        self.subscription  # prevent unused variable warning
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 2)
 
-        self.twist = Twist()
-        self.finish_move = False
+        self.processing = False
+        self.marker_pose = None
+        self.timer_handle = None
 
+    def log_info(self, msg):
+        self.get_logger().info(f"{GREEN}{msg}{RESET}")
 
-        self.subscription = self.create_subscription(
-            JointState,
-            '/joint_states',
-            self.joint_states_callback,
-            10
-        )
-        self.subscription  # prevent unused variable warning
+    def log_warn(self, msg):
+        self.get_logger().warn(f"{YELLOW}{msg}{RESET}")
 
-        self.get_joint = False
-        self.marker = []
+    def log_error(self, msg):
+        self.get_logger().error(f"{RED}{msg}{RESET}")
 
-        self.joint_pub = self.create_publisher(JointTrajectory, '/arm_controller/joint_trajectory', 10)
-        self.trajectory_msg = JointTrajectory()
-
-        self.trajectory_msg.header = Header()
-        self.trajectory_msg.header.frame_id = ''
-        self.trajectory_msg.joint_names = ['joint1', 'joint2', 'joint3', 'joint4']
-    
-
-        self.point = JointTrajectoryPoint()
-        self.point.velocities = [0.0] * 4
-        self.point.accelerations = [0.0] * 4
-        self.point.time_from_start.sec = 0
-        self.point.time_from_start.nanosec = 500
-
-        #sample_pkg/src/simple_manager_node.py
-        # 상태 변수
-        self.aruco_marker_found = False
-        self.task_completed = False
-        self.armrun = False
-        self.aruco_location_x = 0
-        self.aruco_location_y = 0
-        self.aruco_location_z = 0       
-
-        self.marker_id = None
-        self.state = 'START'  
-
-        self.count = 0
-        self.aruco_pose = None  # Aruco marker의 pose 정보를 저장할 변수
-
-        #self.create_timer(1.0, self.run_tasks)
-        
-        #self.twist = Twist()
-
-
-
-    def joint_states_callback(self, msg):
-
-        if self.get_joint == False:
+    def marker_callback(self, msg):
+        if self.processing or len(msg.markers) == 0:
             return
-        for i, name in enumerate(msg.name):
-            position = msg.position[i] if i < len(msg.position) else None
-            if 'joint1' in name:
-                print(f'joint1 : {position}')
-        for i, name in enumerate(msg.name):
-            position = msg.position[i] if i < len(msg.position) else None
-            if 'joint2' in name:
-                print(f'joint2 : {position}')
-        for i, name in enumerate(msg.name):
-            position = msg.position[i] if i < len(msg.position) else None
-            if 'joint3' in name:
-                print(f'joint3 : {position}')
-        for i, name in enumerate(msg.name):
-            position = msg.position[i] if i < len(msg.position) else None
-            if 'joint4' in name:
-                print(f'joint4 : {position}')
 
-    def aruco_listener_callback(self, msg):
-        
-        #Test...
-        print('aruco_listener_callback')
-        self.aruco_arm_controll()
+        marker = msg.markers[0]
+        self.marker_pose = marker.pose.pose
 
+        self.log_info(f"마커 위치 수신: x={self.marker_pose.position.x:.3f}, y={self.marker_pose.position.y:.3f}, z={self.marker_pose.position.z:.3f}")
 
+        self.processing = True
+        self.execute_pick_and_place()
 
-        for marker in msg.markers:
-            if marker.id == self.target_marker_id:
-                self.get_logger().debug(f'Marker ID: {marker.id}, PositionZ: {marker.pose.pose.position.z}')
-                self.get_logger().info(f'Position: x:[{marker.pose.pose.position.x}, y:[{marker.pose.pose.position.y},z:[{marker.pose.pose.position.z}]] ')
-                self.get_logger().info(f'Orientation: x:[{marker.pose.pose.orientation.x}, y:[{marker.pose.pose.orientation.y},z:[{marker.pose.pose.orientation.z}]] ')
+    def send_moveit_request(self, cmd, target, callback=None):
+        req = MoveitControl.Request()
+        req.cmd = cmd
+        if cmd == 0:
+            req.waypoints = target
+        else:
+            req.posename = target
 
-                self.aruco_position_x = marker.pose.pose.position.x
-                self.aruco_position_y = marker.pose.pose.position.y               
-                self.aruco_position_z = marker.pose.pose.position.z
+        self.log_info(f"MoveitControl 서비스 요청: cmd={cmd}, target={target}")
+        future = self.moveit_client.call_async(req)
 
-                # if marker.pose.pose.position.z > 0.30:
-                if marker.pose.pose.position.z > 0.41:
-                    self.get_logger().info(f'publish_cmd_vel(0.10)')
-                    self.publish_cmd_vel(0.10)
-                elif marker.pose.pose.position.z > 0.31:
-                    self.get_logger().info(f'publish_cmd_vel(0.06)')                    
-                    self.publish_cmd_vel(0.06)
-                elif marker.pose.pose.position.z > 0.21 :
-                    self.get_logger().info(f'publish_cmd_vel(0.04)')                    
-                    self.publish_cmd_vel(0.04)
-                else:
-                    self.publish_cmd_vel(0.0)
-                    self.get_logger().info(f'finish_move = True')                    
-                    self.finish_move = True
+        def _handle_response(fut):
+            if fut.result() is not None and fut.result().response:
+                self.log_info(f"서비스 성공: cmd={cmd}, target={target}")
+                if callback:
+                    callback(True)
+            else:
+                self.log_error(f"서비스 실패: cmd={cmd}, target={target}")
+                if callback:
+                    callback(False)
 
-                    self.aruco_arm_controll()
+        future.add_done_callback(_handle_response)
 
-                break
+    def schedule_step(self, delay_sec, func):
+        if self.timer_handle:
+            self.timer_handle.cancel()
+        self.timer_handle = self.create_timer(delay_sec, lambda: (self.timer_handle.cancel(), func())[1])
 
-    def publish_cmd_vel(self, linear_x):
-        self.twist.linear.x = linear_x
-        self.twist.angular.z = 0.0
-        self.cmd_vel_publisher.publish(self.twist)  
+    def execute_pick_and_place(self):
+        self.log_info("Pick & Place 작업 시작")
+        self.send_moveit_request(2, "open", self.step_2_box_front)
 
+    def step_2_box_front(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "02_box_front", self.step_3_move_to_box))
 
-##################################################################################            
-##################################################################################
-    def append_pose_init(self, x,y,z):
-        pose_array = PoseArray()
-        pose = Pose()
+    def step_3_move_to_box(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "03_move_to_box", self.step_4_close_gripper))
 
-        pose.position.x = x
-        pose.position.y =  y
-        pose.position.z =  z
-        pose_array.poses.append(pose)
-        
-        self.get_logger().info(f"{CYAN}Pose initialized - x: {x}, y: {y}, z: {z}{RESET}")
+    def step_4_close_gripper(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(2, "close", self.step_5_lift_up))
 
-        return pose_array
+    def step_5_lift_up(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "04_move_up", self.step_6_conveyor_up))
 
-    def aruco_arm_controll(self):
+    def step_6_conveyor_up(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "05_conveyor_up", self.step_7_conveyor_down))
 
-        print("Impossible Mission Start")        
-        arm_client = TurtlebotArmClient()
+    def step_7_conveyor_down(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "06_conveyor_down", self.step_8_open_gripper))
 
-        print(f"Mission Aruco marker Locaion coordinates: {self.aruco_location_x}, {self.aruco_location_y}, {self.aruco_location_z}")
+    def step_8_open_gripper(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(2, "open", self.step_9_conveyor_up))
 
-        ##### TEST, if I cound aruco_marker...
-        self.aruco_marker_found = True
+    def step_9_conveyor_up(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "07_conveyor_up", self.step_10_return_home))
 
-        if self.aruco_marker_found:
-            self.armrun = True
+    def step_10_return_home(self, success):
+        if not success:
+            self.processing = False
+            return
+        self.schedule_step(2.0, lambda: self.send_moveit_request(1, "lane_tracking_01", self.finish_sequence))
 
-            self.aruco_location_x = -0.92
-            self.aruco_location_y = -0.45
-            self.aruco_location_z = 0.33
+    def finish_sequence(self, success):
+        if success:
+            self.log_info("Pick & Place 작업 완료")
+        else:
+            self.log_error("복귀 실패")
+        self.processing = False
 
-            print(f"Remove Rock Initial Position")
-            time.sleep(2)            
-            self.point.positions = [0.17, -0.058, -0.258, 1.94]
-            print("point",self.point.positions)
-            self.joint_pub.publish(self.trajectory_msg)
-
-
-            print("Move Aruco Cube(Rock) Mission")
-     
-            response = arm_client.send_request(1, "01_home") # move to side
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            print("Gripper Open")
-    
-            response = arm_client.send_request(2, "open")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-
-            print("Cube Position Start")
-            #pose_array = self.append_pose_init(0.137496 - self.aruco_location_y + 0.05,0.00 - self.aruco_location_x ,0.122354 )
-            #response = arm_client.send_request(0, "", pose_array)
-            #arm_client.get_logger().info(f'Response: {response.response}')
-
-            print("Cube Box Front Start...")       
-            time.sleep(2)
-            response = arm_client.send_request(1, "02_box_front")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            print("Move to Box Start...")       
-            time.sleep(2)                 
-            response = arm_client.send_request(1, "03_move_to_box")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            time.sleep(2)
-            print("Gripper Close")
-            response = arm_client.send_request(2, "close")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-
-
-            print("Move up Start...")       
-            time.sleep(2)                 
-            response = arm_client.send_request(1, "04_move_up")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-
-
-            print("Conveyor up Start...")       
-            time.sleep(2)  
-            response = arm_client.send_request(1, "05_conveyor_up")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            print("Conveyor down Start...")       
-            time.sleep(2)  
-            response = arm_client.send_request(1, "06_conveyor_down")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            time.sleep(2)
-            print("Gripper Open")
-            response = arm_client.send_request(2, "open")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-            print("Conveyor up Start...")       
-            time.sleep(2)  
-            response = arm_client.send_request(1, "07_conveyor_up")
-            arm_client.get_logger().info(f'Response: {response.response}')
-
-
-   
-            response = arm_client.send_request(1, "08_home")
-            arm_client.get_logger().info(f'Response: {response.response}')
-            time.sleep(1)
-
-            #print ("Remove Rock Mission Start")
-
-            #response = arm_client.send_request(1, "conveyor_up")
-            #arm_client.get_logger().info(f'Response: {response.response}')
-
-
-            #response = arm_client.send_request(2, "open")
-            #arm_client.get_logger().info(f'Response: {response.response}')
-
-
-            #print("Return Sweet Home ")
-
-            #response = arm_client.send_request(1, "camera_home")
-            #arm_client.get_logger().info(f'Response: {response.response}')    
-
-
-            time.sleep(2)
-
-            self.finish_move = True
-
-            print("Impossible Mission Clear")
-
-            self.armrun = False
-    
 def main(args=None):
     rclpy.init(args=args)
-    node = ArucoMarkerListener()
-    #rclpy.spin(node)
-
-    joint_pub = node.create_publisher(JointTrajectory, '/arm_controller/joint_trajectory', 10)
-    trajectory_msg = JointTrajectory()
-
-    trajectory_msg.header = Header()
-    trajectory_msg.header.frame_id = ''
-    trajectory_msg.joint_names = ['joint1', 'joint2', 'joint3', 'joint4']
-
-    point = JointTrajectoryPoint()
-    point.velocities = [0.0] * 4
-    point.accelerations = [0.0] * 4
-    point.time_from_start.sec = 0
-    point.time_from_start.nanosec = 500
-
-
-    # Initial Position
-    #ros2 topic list => ros2 topic echo /joint_states --once
-    #point.positions =  [0.0, 0.5236, -0.7156, 0.8203]  # (단위: 라디안) <= 0, -44, 9, 72
-    #point.positions = [0.0, 0.7317, -0.6918, 0.7701]    
-    point.positions = [0.0, 0.5317, -0.6918, 0.7701] 
-
-    trajectory_msg.points = [point]
-    joint_pub.publish(trajectory_msg)
-
-    print("Pick and Place Init done")
-    rclpy.spin_once(node)
-
-    while(rclpy.ok()):
-        print("Key Input Waiting.")
-        print("0: lane tracking")
-        print("1: cube home")
-        print("2: box home")
-        print("4: forward")
-        print("5: backward")    
-        print("8: joint states")   
-        print("a: aruco/move cube(rock)")   
-
-        key_value = getkey.getkey()
-        if key_value == '0':          # lane tracking
-            print(f"No. {key_value}")
-            point.positions = [0.0, 0.5317, -0.6918, 0.7701] 
-            print("point",point.positions)
-            joint_pub.publish(trajectory_msg)        
-        elif key_value == '1':          # home 1
-            print(f"No. {key_value}")
-            point.positions = [0.0, -0.058, -0.258, 1.94]
-            print("point",point.positions)
-            joint_pub.publish(trajectory_msg)
-
-        elif key_value == '2':        # move forward          node.twist.linear.x = 0.5
-            node.twist.angular.z = 0.0
-            node.cmd_vel_publisher.publish(node.twist)      
-            print(f"No. {key_value}")
-            point.positions = [0.0, -1.052, 1.106, 0.029]
-            print("point",point.positions)
-            joint_pub.publish(trajectory_msg)
-
-        elif key_value == '3':        # move wheel to aruco cube
-            print(f"No. {key_value}")
-            while True:
-                rclpy.spin_once(node)
-                
-                if(node.finish_move == True):
-                    node.finish_move = False
-                    break
-              
-        elif key_value == '4':        # forward
-            print(f"No. {key_value}")        
-            node.twist.linear.x = 0.5
-            node.twist.angular.z = 0.0
-            node.cmd_vel_publisher.publish(node.twist)            
-
-        elif key_value == '5':        # backward
-            print(f"No. {key_value}") 
-            node.twist.linear.x =-0.5
-            node.twist.angular.z = 0.0
-            node.cmd_vel_publisher.publish(node.twist)            
-
-        elif key_value == '6':        # forward + left turn
-            print(f"No. {key_value}")
-            node.twist.linear.x = 0.5
-            node.twist.angular.z = 0.1
-            node.cmd_vel_publisher.publish(node.twist)            
-
-        elif key_value == '7':        # forward + right turn
-            print(f"No. {key_value}")
-            node.twist.linear.x = 0.5
-            node.twist.angular.z =-0.1
-            node.cmd_vel_publisher.publish(node.twist)            
-
-        elif key_value == '8':        # get joint value
-            print(f"No. {key_value}")
-            node.get_joint = True
-            rclpy.spin_once(node)
-            node.get_joint = False
-
-        elif key_value == '9':        # distance and offset for marker
-            print(f"No. {key_value}")
-            rclpy.spin_once(node)
-        elif key_value == 'a':
-            print(f"No. {key_value}")
-            node.aruco_arm_controll()           
-        elif key_value == 'b':
-            print(f"No. {key_value}")
-            point.positions = [0.0, 0.5317, -0.0918, 0.7701] 
-            print("point",point.positions)
-            joint_pub.publish(trajectory_msg)  
-
-        elif key_value == 'q':
-            print(f"No. {key_value}")
-            break
-
-    node.destroy_node()
-    rclpy.shutdown()
+    node = AutoPickPlaceNode()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    try:
+        executor.spin()
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

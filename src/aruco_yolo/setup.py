@@ -15,7 +15,10 @@ setup(
         ('share/' + package_name + '/models', ['models/yolov8s_trained.pt']), 
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*')))
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools',
+                      'numpy',
+                      'pyyaml',
+                      'opencv-python'],
     zip_safe=True,
     maintainer='rokey',
     maintainer_email='rokey@todo.todo',
