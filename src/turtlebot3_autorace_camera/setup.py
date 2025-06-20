@@ -43,6 +43,7 @@ setup(
 
             'capture_img = turtlebot3_autorace_camera.capture_img:main',
             'image_preprocess = turtlebot3_autorace_camera.image_preprocess:main',
+            'image_preprocess2 = turtlebot3_autorace_camera.image_preprocess2:main',
 
 
         ],
