@@ -74,10 +74,6 @@ class ControlLane(Node):
         angular_z = Kp * error + Kd * (error - self.last_error)
         self.last_error = error
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 5b60e44b30c4058db80e34018832c29e0158f50c
         twist = Twist()
         # 선형 속도: error에 따라 속도를 조정 (최대 0.05 제한)
         twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 640, 0) ** 2.2), 0.03)
