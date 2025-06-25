@@ -7,3 +7,5 @@ rokey-jw@rokey-jw:~/rokeypj_ws$ ros2 launch turtlebot3_autorace_detect detect_la
 [INFO] [launch]: Default logging verbosity is set to INFO
 [ERROR] [launch]: Caught exception in launch (see debug for traceback): executable 'detect_lane2' not found on the libexec directory '/home/rokey-jw/rokeypj_ws/install/turtlebot3_autorace_detect/lib/turtlebot3_autorace_detect' 
 ```
+
+https://www.notion.so/Detect-depth-21cf166bed8180c0b599f4a2e26c43aa
